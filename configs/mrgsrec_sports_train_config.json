@@ -1,0 +1,115 @@
+{
+    "experiment_name": "mrgsrec_beauty",
+    "dataset": {
+      "use_user_graph": false,
+      "use_item_graph": false,
+      "graph_dir_path": "./data2/Sports",
+      "dataset": {
+        "path_to_data_dir": "./data2",
+        "name": "Sports",
+        "max_sequence_length": 10,
+        "samplers": {}
+      }
+    },
+    "dataloader": {
+      "train": {
+        "batch_size": 256,
+        "drop_last": true,
+        "shuffle": true
+      },
+      "warm_val": {
+        "batch_size": 256,
+        "drop_last": false,
+        "shuffle": true
+      },
+      "validation": {
+        "batch_size": 256,
+        "drop_last": false,
+        "shuffle": false
+      }
+    },
+    "model": {
+      "sequence_prefix": "item",
+      "user_prefix": "user",
+      "positive_prefix": "positive",
+      "embedding_dim": 8,
+      "num_heads": 2,
+      "num_layers": 2,
+      "dim_feedforward": 256,
+      "dropout": 0.3,
+      "activation": "gelu",
+      "layer_norm_eps": 1e-9,
+      "initializer_range": 0.02
+    },
+    "optimizer": {
+      "optimizer": {
+        "type": "adam",
+        "lr": 0.001
+      }
+    },
+    "optimizer_fi": {
+        "optimizer": {
+          "type": "adam",
+          "lr": 0.0001
+        }
+    },
+    "loss": {
+      "local": {
+        "predictions_prefix": "local_prediction",
+        "labels_prefix": "positive"
+      },
+      "global": {
+        "positive_prefix": "global_positive",
+        "negative_prefix": "global_negative"
+      },
+      "fusion": {
+        "positive_prefix": "fusion_positive",
+        "negative_prefix": "fusion_negative"
+      },
+      "contrastive": {
+        "fst_embeddings_prefix": "contrastive_fst_embeddings",
+        "snd_embeddings_prefix": "contrastive_snd_embeddings"
+      }
+    },
+    "metrics": {
+      "ndcg@5": {
+        "type": "ndcg",
+        "k": 5
+      },
+      "ndcg@10": {
+        "type": "ndcg",
+        "k": 10
+      },
+      "ndcg@20": {
+        "type": "ndcg",
+        "k": 20
+      },
+      "recall@5": {
+        "type": "recall",
+        "k": 5
+      },
+      "recall@10": {
+        "type": "recall",
+        "k": 10
+      },
+      "recall@20": {
+        "type": "recall",
+        "k": 20
+      },
+      "coverage@5": {
+        "type": "coverage",
+        "k": 5
+      },
+      "coverage@10": {
+        "type": "coverage",
+        "k": 10
+      },
+      "coverage@20": {
+        "type": "coverage",
+        "k": 20
+      }
+    },
+    "pred_prefix": "logits",
+    "label_prefix": "labels"
+  }
+  
