@@ -3,9 +3,9 @@
     "dataset": {
       "use_user_graph": false,
       "use_item_graph": false,
-      "graph_dir_path": "../data2/Clothes",
+      "graph_dir_path": "data2/Clothes",
       "dataset": {
-        "path_to_data_dir": "../data2",
+        "path_to_data_dir": "data2",
         "name": "Clothes",
         "max_sequence_length": 10,
         "samplers": {}

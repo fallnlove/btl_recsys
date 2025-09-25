@@ -1,4 +1,5 @@
 import copy
+
 import torch
 from torch.utils.data import DataLoader
 
@@ -18,7 +19,11 @@ class TorchDataloader:
     def create_from_config(cls, config, **kwargs):
         create_config = copy.deepcopy(config)
         batch_processor = BasicBatchProcessor()
-        return cls(dataloader=DataLoader(kwargs['dataset'], collate_fn=batch_processor, **create_config))
+        return cls(
+            dataloader=DataLoader(
+                kwargs["dataset"], collate_fn=batch_processor, **create_config
+            )
+        )
 
 
 class BasicBatchProcessor:
@@ -27,16 +32,18 @@ class BasicBatchProcessor:
         processed_batch = {}
 
         for key in batch[0].keys():
-            if key.endswith('.ids'):
-                prefix = key.split('.')[0]
-                assert '{}.length'.format(prefix) in batch[0]
+            if key.endswith(".ids"):
+                prefix = key.split(".")[0]
+                assert "{}.length".format(prefix) in batch[0]
 
-                processed_batch[f'{prefix}.ids'] = []
-                processed_batch[f'{prefix}.length'] = []
+                processed_batch[f"{prefix}.ids"] = []
+                processed_batch[f"{prefix}.length"] = []
 
                 for sample in batch:
-                    processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
-                    processed_batch[f'{prefix}.length'].append(sample[f'{prefix}.length'])
+                    processed_batch[f"{prefix}.ids"].extend(sample[f"{prefix}.ids"])
+                    processed_batch[f"{prefix}.length"].append(
+                        sample[f"{prefix}.length"]
+                    )
 
         for part, values in processed_batch.items():
             processed_batch[part] = torch.tensor(values, dtype=torch.long)

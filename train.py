@@ -1,37 +1,43 @@
-from tqdm import trange
-from utils import parse_args, create_logger, DEVICE, fix_random_seed
-
-from dataset import GraphDataset
-from dataloader import TorchDataloader
-from loss import MRGSRecLoss
-from model import MRGSRecModel
-from optimizer import BasicOptimizer
-
-from metrics import BaseMetric, StatefullMetric
-from inference import inference
-
 import copy
 import json
-import torch
-from tqdm import tqdm
 import time
 
+import torch
+from tqdm import tqdm, trange
+
+from src.dataloader import TorchDataloader
+from src.dataset import GraphDataset
+from src.inference import inference
+from src.loss import MRGSRecLoss
+from src.metrics import BaseMetric, StatefullMetric
+from src.model import MRGSRecModel
+from src.optimizer import BasicOptimizer
+from src.utils import DEVICE, create_logger, fix_random_seed, parse_args
 
 logger = create_logger(name=__name__)
 seed_val = 42
 
 
-
-
-def train(dataloader, warm_dataloader, model, optimizer, optimizer_fi, loss_function, epoch_cnt=None, step_cnt=None, best_metric=None, inference_dict=None,):
-    logger.debug('Start training...')
+def train(
+    dataloader,
+    warm_dataloader,
+    model,
+    optimizer,
+    optimizer_fi,
+    loss_function,
+    epoch_cnt=None,
+    step_cnt=None,
+    best_metric=None,
+    inference_dict=None,
+):
+    logger.debug("Start training...")
     train_start = time.time()
     epoch_nums = 100
     epoch_wait = 10
     best_metric = 0.0
     best_epoch = 0
     for epoch_num in trange(epoch_nums):
-        logger.debug(f'Start epoch {epoch_num}')
+        logger.debug(f"Start epoch {epoch_num}")
         for step, batch in tqdm(enumerate(dataloader)):
             batch_ = copy.deepcopy(batch)
 
@@ -51,7 +57,6 @@ def train(dataloader, warm_dataloader, model, optimizer, optimizer_fi, loss_func
             print(f"no more improve in {epoch_wait} epoch")
             break
 
-            
     train_end = time.time()
     print("Total time:", train_end - train_start)
     return best_metric
@@ -112,90 +117,86 @@ def train(dataloader, warm_dataloader, model, optimizer, optimizer_fi, loss_func
     # return best_checkpoint
 
 
-def main(dropout):
+def main(dropout=None):
     fix_random_seed(seed_val)
     config = parse_args()
-    config["model"]["dropout"] = dropout
+    if dropout is not None:
+        config["model"]["dropout"] = dropout
 
-    logger.debug('Training config: \n{}'.format(json.dumps(config, indent=2)))
-    logger.debug('Current DEVICE: {}'.format(DEVICE))
+    logger.debug("Training config: \n{}".format(json.dumps(config, indent=2)))
+    logger.debug("Current DEVICE: {}".format(DEVICE))
 
-    dataset = GraphDataset.create_from_config(config['dataset'])
+    dataset = GraphDataset.create_from_config(config["dataset"])
 
     train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
 
     train_dataloader = TorchDataloader.create_from_config(
-        config['dataloader']['train'],
-        dataset=train_sampler,
-        **dataset.meta
+        config["dataloader"]["train"], dataset=train_sampler, **dataset.meta
     )
-    
+
     warm_dataloader = TorchDataloader.create_from_config(
-        config['dataloader']['warm_val'],
-        dataset=train_sampler,
-        **dataset.meta
+        config["dataloader"]["warm_val"], dataset=train_sampler, **dataset.meta
     )
 
     validation_dataloader = TorchDataloader.create_from_config(
-        config['dataloader']['validation'],
-        dataset=validation_sampler,
-        **dataset.meta
+        config["dataloader"]["validation"], dataset=validation_sampler, **dataset.meta
     )
-    
+
     eval_dataloader = TorchDataloader.create_from_config(
-        config['dataloader']['validation'],
-        dataset=test_sampler,
-        **dataset.meta
+        config["dataloader"]["validation"], dataset=test_sampler, **dataset.meta
     )
 
-    model = MRGSRecModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
-    loss_function = MRGSRecLoss.create_from_config(config['loss'])
-    optimizer = BasicOptimizer.create_from_config(config['optimizer'], model=model)
-    optimizer_fi = BasicOptimizer.create_from_config(config['optimizer_fi'], model=model)
+    model = MRGSRecModel.create_from_config(config["model"], **dataset.meta).to(DEVICE)
+    loss_function = MRGSRecLoss.create_from_config(config["loss"])
+    optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
+    optimizer_fi = BasicOptimizer.create_from_config(
+        config["optimizer_fi"], model=model
+    )
 
-    logger.debug('Everything is ready for training process!')
+    logger.debug("Everything is ready for training process!")
 
     metrics = {
-        metric_name: BaseMetric.create_from_config(metric_cfg , **dataset.meta)
-        for metric_name, metric_cfg in config['metrics'].items()
+        metric_name: BaseMetric.create_from_config(metric_cfg, **dataset.meta)
+        for metric_name, metric_cfg in config["metrics"].items()
     }
 
     inference_dict = dict(
-        dataloader=validation_dataloader, 
-        model=model, 
-        metrics=metrics, 
-        pred_prefix=config['pred_prefix'], 
-        labels_prefix=config['label_prefix']
+        dataloader=validation_dataloader,
+        model=model,
+        metrics=metrics,
+        pred_prefix=config["pred_prefix"],
+        labels_prefix=config["label_prefix"],
     )
 
     # Train process
     best_metric = train(
         dataloader=train_dataloader,
-        warm_dataloader = train_dataloader,
+        warm_dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
         optimizer_fi=optimizer_fi,
         loss_function=loss_function,
-        epoch_cnt=config.get('train_epochs_num'),
-        step_cnt=config.get('train_steps_num'),
-        best_metric=config.get('best_metric'),
-        inference_dict=inference_dict
+        epoch_cnt=config.get("train_epochs_num"),
+        step_cnt=config.get("train_steps_num"),
+        best_metric=config.get("best_metric"),
+        inference_dict=inference_dict,
     )
     print(f"ndcg@10 = {best_metric}")
     return best_metric
-    _ = inference(
-        **inference_dict
+    _ = inference(**inference_dict)
+
+    logger.debug("Saving model...")
+    checkpoint_path = "./checkpoints/{}_final_state.pth".format(
+        config["experiment_name"]
     )
-
-    logger.debug('Saving model...')
-    checkpoint_path = './checkpoints/{}_final_state.pth'.format(config['experiment_name'])
     torch.save(model.state_dict(), checkpoint_path)
-    logger.debug('Saved model as {}'.format(checkpoint_path))
+    logger.debug("Saved model as {}".format(checkpoint_path))
 
 
-if __name__ == '__main__':
-    metrics = []
-    dropouts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-    for dropout in dropouts:
-        metrics.append(main(dropout))
-    print(metrics)
+if __name__ == "__main__":
+    main()
+    # metrics = []
+    # dropouts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+    # for dropout in dropouts:
+    #     metrics.append(main(dropout))
+    # print(metrics)
