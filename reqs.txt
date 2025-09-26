@@ -3,3 +3,4 @@ scipy==1.16.0
 torch==2.8.0
 tqdm
 ipykernel
+pandas

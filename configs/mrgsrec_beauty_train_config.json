@@ -1,12 +1,12 @@
 {
-    "experiment_name": "mrgsrec_beauty",
+    "experiment_name": "mrgsrec_beauty4",
     "dataset": {
       "use_user_graph": false,
       "use_item_graph": false,
-      "graph_dir_path": "data2/Beauty",
+      "graph_dir_path": "data2/Beauty4",
       "dataset": {
         "path_to_data_dir": "data2",
-        "name": "Beauty",
+        "name": "Beauty4",
         "max_sequence_length": 10,
         "samplers": {}
       }

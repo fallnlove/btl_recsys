@@ -209,3 +209,4 @@ __marimo__/
 # my
 data2/*
 !data2/.gitkeep
+raw_data/*
