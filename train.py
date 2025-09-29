@@ -1,9 +1,11 @@
+from omegaconf import OmegaConf
 import copy
 import json
 import time
 
 import torch
 from tqdm import tqdm, trange
+import hydra
 
 from src.dataloader import TorchDataloader
 from src.dataset import GraphDataset
@@ -117,13 +119,13 @@ def train(
     # return best_checkpoint
 
 
-def main(dropout=None):
+@hydra.main(version_base=None, config_path="configs", config_name="ml1m")
+def main(cfg):
     fix_random_seed(seed_val)
-    config = parse_args()
-    if dropout is not None:
-        config["model"]["dropout"] = dropout
+    config = OmegaConf.to_container(cfg, resolve=True)
+    print(config)
 
-    logger.debug("Training config: \n{}".format(json.dumps(config, indent=2)))
+    logger.debug("Training config: \n{}".format(OmegaConf.to_yaml(config)))
     logger.debug("Current DEVICE: {}".format(DEVICE))
 
     dataset = GraphDataset.create_from_config(config["dataset"])

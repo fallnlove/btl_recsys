@@ -210,3 +210,5 @@ __marimo__/
 data2/*
 !data2/.gitkeep
 raw_data/*
+outputs/*
+!outputs/.gitkeep
