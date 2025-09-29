@@ -27,18 +27,16 @@ def train(
     optimizer,
     optimizer_fi,
     loss_function,
-    epoch_cnt=None,
-    step_cnt=None,
+    num_epochs,
+    early_stopping_rounds,
     best_metric=None,
     inference_dict=None,
 ):
     logger.debug("Start training...")
     train_start = time.time()
-    epoch_nums = 100
-    epoch_wait = 10
     best_metric = 0.0
     best_epoch = 0
-    for epoch_num in trange(epoch_nums):
+    for epoch_num in trange(num_epochs):
         logger.debug(f"Start epoch {epoch_num}")
         for step, batch in tqdm(enumerate(dataloader)):
             batch_ = copy.deepcopy(batch)
@@ -55,8 +53,8 @@ def train(
         if current_metric > best_metric:
             best_metric = current_metric
             best_epoch = epoch_num
-        elif epoch_num - best_epoch > epoch_wait:
-            print(f"no more improve in {epoch_wait} epoch")
+        elif epoch_num - best_epoch > early_stopping_rounds:
+            print(f"no more improve in {early_stopping_rounds} epoch")
             break
 
     train_end = time.time()
@@ -121,6 +119,10 @@ def train(
 
 @hydra.main(version_base=None, config_path="configs", config_name="ml1m")
 def main(cfg):
+    run_train(cfg)
+
+
+def run_train(cfg):
     fix_random_seed(seed_val)
     config = OmegaConf.to_container(cfg, resolve=True)
     print(config)
@@ -178,8 +180,8 @@ def main(cfg):
         optimizer=optimizer,
         optimizer_fi=optimizer_fi,
         loss_function=loss_function,
-        epoch_cnt=config.get("train_epochs_num"),
-        step_cnt=config.get("train_steps_num"),
+        num_epochs=config.get("num_epochs", 100),
+        early_stopping_rounds=config.get("early_stopping_rounds", 10),
         best_metric=config.get("best_metric"),
         inference_dict=inference_dict,
     )
@@ -197,8 +199,3 @@ def main(cfg):
 
 if __name__ == "__main__":
     main()
-    # metrics = []
-    # dropouts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-    # for dropout in dropouts:
-    #     metrics.append(main(dropout))
-    # print(metrics)

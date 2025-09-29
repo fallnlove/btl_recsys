@@ -104,10 +104,15 @@ class ContrastiveObjective:
         ).reshape(
             2 * batch_size, 1
         )  # (2 * x, 1)
-        assert torch.allclose(
+        if not torch.allclose(
             torch.diag(similarity_scores, batch_size),
             torch.diag(similarity_scores, -batch_size),
-        )
+        ):
+            print(
+                torch.diag(similarity_scores, batch_size),
+                torch.diag(similarity_scores, -batch_size),
+            )
+            assert False
 
         mask = torch.ones(
             2 * batch_size, 2 * batch_size, dtype=torch.bool

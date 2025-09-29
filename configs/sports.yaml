@@ -37,6 +37,7 @@ optimizer:
   optimizer:
     type: adam
     lr: 0.001
+  clip_grad_threshold: 10.0
 optimizer_fi:
   optimizer:
     type: adam

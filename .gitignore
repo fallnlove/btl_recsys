@@ -212,3 +212,5 @@ data2/*
 raw_data/*
 outputs/*
 !outputs/.gitkeep
+optuna_outputs/*
+!optuna_outputs/.gitkeep
