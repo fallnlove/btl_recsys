@@ -73,7 +73,7 @@ def main(config_path, num_trials, exp_name):
     index_path = outdir / "index.csv"
 
     study = optuna.create_study(
-        direction="minimize",
+        direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=int(base_cfg.get("seed", 42))),
     )
 
