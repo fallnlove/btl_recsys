@@ -126,10 +126,72 @@ class GraphDataset:
         self._train_user_interactions = np.array(train_user_interactions)
         self._train_item_interactions = np.array(train_item_interactions)
 
+        self._graph = self._build_general_graph(
+            graph_dir_path, train_user_interactions, train_item_interactions
+        )
+        self._user_graph = self._build_user_graph(graph_dir_path, train_item_2_users)
+        self._item_graph = self._build_item_graph(graph_dir_path, train_user_2_items)
+
+    def _build_item_graph(self, graph_dir_path, train_user_2_items):
+        if self._use_item_graph:
+            path_to_item_graph = os.path.join(graph_dir_path, "item_graph.npz")
+            if os.path.exists(path_to_item_graph):
+                return sp.load_npz(path_to_item_graph)
+            else:
+                item2item_interactions_fst = []
+                item2item_interactions_snd = []
+                visited_user_item_pairs = set()
+                visited_item_item_pairs = set()
+
+                for user_id, item_id in tqdm(
+                    zip(self._train_user_interactions, self._train_item_interactions)
+                ):
+                    if (user_id, item_id) in visited_user_item_pairs:
+                        continue  # process (user, item) pair only once
+                    visited_user_item_pairs.add((user_id, item_id))
+
+                    for connected_item_id in train_user_2_items[user_id]:
+                        if (
+                            item_id,
+                            connected_item_id,
+                        ) in visited_item_item_pairs or item_id == connected_item_id:
+                            continue  # add (item, item) to graph connections pair only once
+                        visited_item_item_pairs.add((item_id, connected_item_id))
+
+                        item2item_interactions_fst.append(item_id)
+                        item2item_interactions_snd.append(connected_item_id)
+
+                # (item, item) graph
+                item2item_connections = csr_matrix(
+                    (
+                        np.ones(len(item2item_interactions_fst)),
+                        (item2item_interactions_fst, item2item_interactions_snd),
+                    ),
+                    shape=(self._num_items + 2, self._num_items + 2),
+                )
+                self._item_graph = self.get_sparse_graph_layer(
+                    item2item_connections,
+                    self._num_items + 2,
+                    self._num_items + 2,
+                    biparite=False,
+                )
+                # sp.save_npz(path_to_item_graph, self._item_graph)
+
+            return (
+                self._convert_sp_mat_to_sp_tensor(self._item_graph)
+                .coalesce()
+                .to(DEVICE)
+            )
+        else:
+            return None
+
+    def _build_general_graph(
+        self, graph_dir_path, train_user_interactions, train_item_interactions
+    ):
         path_to_graph = os.path.join(graph_dir_path, "general_graph.npz")
         if os.path.exists(path_to_graph):
             print(1)
-            self._graph = sp.load_npz(path_to_graph)
+            return sp.load_npz(path_to_graph)
         else:
             print(2)
             # place ones only when co-occurrence happens
@@ -147,15 +209,13 @@ class GraphDataset:
                 biparite=True,
             )
             # sp.save_npz(path_to_graph, self._graph)
+            return self._convert_sp_mat_to_sp_tensor(self._graph).coalesce().to(DEVICE)
 
-        self._graph = (
-            self._convert_sp_mat_to_sp_tensor(self._graph).coalesce().to(DEVICE)
-        )
-
+    def _build_user_graph(self, graph_dir_path, train_item_2_users):
         if self._use_user_graph:
             path_to_user_graph = os.path.join(graph_dir_path, "user_graph.npz")
             if os.path.exists(path_to_user_graph):
-                self._user_graph = sp.load_npz(path_to_user_graph)
+                return sp.load_npz(path_to_user_graph)
             else:
                 user2user_interactions_fst = []
                 user2user_interactions_snd = []
@@ -197,65 +257,13 @@ class GraphDataset:
                 )
                 # sp.save_npz(path_to_user_graph, self._user_graph)
 
-            self._user_graph = (
-                self._convert_sp_mat_to_sp_tensor(self._user_graph)
-                .coalesce()
-                .to(DEVICE)
-            )
-        else:
-            self._user_graph = None
-
-        if self._use_item_graph:
-            path_to_item_graph = os.path.join(graph_dir_path, "item_graph.npz")
-            if os.path.exists(path_to_item_graph):
-                self._item_graph = sp.load_npz(path_to_item_graph)
-            else:
-                item2item_interactions_fst = []
-                item2item_interactions_snd = []
-                visited_user_item_pairs = set()
-                visited_item_item_pairs = set()
-
-                for user_id, item_id in tqdm(
-                    zip(self._train_user_interactions, self._train_item_interactions)
-                ):
-                    if (user_id, item_id) in visited_user_item_pairs:
-                        continue  # process (user, item) pair only once
-                    visited_user_item_pairs.add((user_id, item_id))
-
-                    for connected_item_id in train_user_2_items[user_id]:
-                        if (
-                            item_id,
-                            connected_item_id,
-                        ) in visited_item_item_pairs or item_id == connected_item_id:
-                            continue  # add (item, item) to graph connections pair only once
-                        visited_item_item_pairs.add((item_id, connected_item_id))
-
-                        item2item_interactions_fst.append(item_id)
-                        item2item_interactions_snd.append(connected_item_id)
-
-                # (item, item) graph
-                item2item_connections = csr_matrix(
-                    (
-                        np.ones(len(item2item_interactions_fst)),
-                        (item2item_interactions_fst, item2item_interactions_snd),
-                    ),
-                    shape=(self._num_items + 2, self._num_items + 2),
+                return (
+                    self._convert_sp_mat_to_sp_tensor(self._user_graph)
+                    .coalesce()
+                    .to(DEVICE)
                 )
-                self._item_graph = self.get_sparse_graph_layer(
-                    item2item_connections,
-                    self._num_items + 2,
-                    self._num_items + 2,
-                    biparite=False,
-                )
-                # sp.save_npz(path_to_item_graph, self._item_graph)
-
-            self._item_graph = (
-                self._convert_sp_mat_to_sp_tensor(self._item_graph)
-                .coalesce()
-                .to(DEVICE)
-            )
         else:
-            self._item_graph = None
+            return None
 
     def _proccess_sampler(
         self,
