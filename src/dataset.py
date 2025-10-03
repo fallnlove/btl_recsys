@@ -100,51 +100,27 @@ class GraphDataset:
         train_item_2_users = defaultdict(set)
         visited_user_item_pairs = set()
 
-        for sample in train_sampler.dataset:
-            user_id = sample["user.ids"][0]
-            item_ids = sample["item.ids"]
-
-            for item_id in item_ids:
-                if (user_id, item_id) not in visited_user_item_pairs:
-                    train_interactions.append((user_id, item_id))
-                    train_user_interactions.append(user_id)
-                    train_item_interactions.append(item_id)
-
-                    train_user_2_items[user_id].add(item_id)
-                    train_item_2_users[item_id].add(user_id)
-
-                    visited_user_item_pairs.add((user_id, item_id))
+        self._proccess_sampler(
+            train_sampler,
+            visited_user_item_pairs,
+            train_interactions,
+            train_user_interactions,
+            train_item_interactions,
+            train_user_2_items,
+            train_item_2_users,
+        )
 
         if not self._use_train_data_only:
-            for sample in validation_sampler.dataset:
-                user_id = sample["user.ids"][0]
-                item_ids = sample["item.ids"]
-
-                for item_id in item_ids:
-                    if (user_id, item_id) not in visited_user_item_pairs:
-                        train_interactions.append((user_id, item_id))
-                        train_user_interactions.append(user_id)
-                        train_item_interactions.append(item_id)
-
-                        train_user_2_items[user_id].add(item_id)
-                        train_item_2_users[item_id].add(user_id)
-
-                        visited_user_item_pairs.add((user_id, item_id))
-
-            for sample in test_sampler.dataset:
-                user_id = sample["user.ids"][0]
-                item_ids = sample["item.ids"]
-
-                for item_id in item_ids:
-                    if (user_id, item_id) not in visited_user_item_pairs:
-                        train_interactions.append((user_id, item_id))
-                        train_user_interactions.append(user_id)
-                        train_item_interactions.append(item_id)
-
-                        train_user_2_items[user_id].add(item_id)
-                        train_item_2_users[item_id].add(user_id)
-
-                        visited_user_item_pairs.add((user_id, item_id))
+            for sampler in [validation_sampler, test_sampler]:
+                self._proccess_sampler(
+                    sampler,
+                    visited_user_item_pairs,
+                    train_interactions,
+                    train_user_interactions,
+                    train_item_interactions,
+                    train_user_2_items,
+                    train_item_2_users,
+                )
 
         self._train_interactions = np.array(train_interactions)
         self._train_user_interactions = np.array(train_user_interactions)
@@ -280,6 +256,31 @@ class GraphDataset:
             )
         else:
             self._item_graph = None
+
+    def _proccess_sampler(
+        self,
+        sampler,
+        visited_user_item_pairs,
+        train_interactions,
+        train_user_interactions,
+        train_item_interactions,
+        train_user_2_items,
+        train_item_2_users,
+    ):
+        for sample in sampler.dataset:
+            user_id = sample["user.ids"][0]
+            item_ids = sample["item.ids"]
+
+            for item_id in item_ids:
+                if (user_id, item_id) not in visited_user_item_pairs:
+                    train_interactions.append((user_id, item_id))
+                    train_user_interactions.append(user_id)
+                    train_item_interactions.append(item_id)
+
+                    train_user_2_items[user_id].add(item_id)
+                    train_item_2_users[item_id].add(user_id)
+
+                    visited_user_item_pairs.add((user_id, item_id))
 
     @classmethod
     def create_from_config(cls, config):
