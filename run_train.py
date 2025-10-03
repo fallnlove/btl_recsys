@@ -125,10 +125,9 @@ def main(cfg):
 def run_train(cfg):
     fix_random_seed(seed_val)
     config = OmegaConf.to_container(cfg, resolve=True)
-    print(config)
 
-    logger.debug("Training config: \n{}".format(OmegaConf.to_yaml(config)))
-    logger.debug("Current DEVICE: {}".format(DEVICE))
+    logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
+    logger.info("Current DEVICE: {}".format(DEVICE))
 
     dataset = GraphDataset.create_from_config(config["dataset"])
 

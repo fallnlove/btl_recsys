@@ -14,47 +14,10 @@ from .utils import DEVICE
 logger = logging.getLogger(__name__)
 
 
-class TrainSampler:
-
-    def __init__(self, dataset, num_users, num_items):
-        self._dataset = dataset
-        self._num_users = num_users
-        self._num_items = num_items
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            dataset=kwargs["dataset"],
-            num_users=kwargs["num_users"],
-            num_items=kwargs["num_items"],
-        )
-
-    @property
-    def dataset(self):
-        return self._dataset
-
-    def __len__(self):
-        return len(self._dataset)
-
-    def __getitem__(self, index):
-        sample = copy.deepcopy(self._dataset[index])
-
-        item_sequence = sample["item.ids"][:-1]
-        next_item_sequence = sample["item.ids"][1:]
-
-        return {
-            "user.ids": sample["user.ids"],
-            "user.length": sample["user.length"],
-            "item.ids": item_sequence,
-            "item.length": len(item_sequence),
-            "positive.ids": next_item_sequence,
-            "positive.length": len(next_item_sequence),
-        }
-
-
-class EvalSampler:
-
-    def __init__(self, dataset, num_users, num_items):
+class SequenceSampler:
+    def __init__(self, dataset, num_users, num_items, mode):
+        assert mode in ["train", "eval"]
+        self._mode = mode
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
@@ -69,25 +32,41 @@ class EvalSampler:
             dataset=kwargs["dataset"],
             num_users=kwargs["num_users"],
             num_items=kwargs["num_items"],
+            mode=kwargs["mode"],
         )
 
     def __len__(self):
         return len(self._dataset)
 
     def __getitem__(self, index):
-        sample = copy.deepcopy(self._dataset[index])
+        if self._mode == "train":
+            sample = copy.deepcopy(self._dataset[index])
 
-        item_sequence = sample["item.ids"][:-1]
-        next_item = sample["item.ids"][-1]
+            item_sequence = sample["item.ids"][:-1]
+            next_item_sequence = sample["item.ids"][1:]
 
-        return {
-            "user.ids": sample["user.ids"],
-            "user.length": sample["user.length"],
-            "item.ids": item_sequence,
-            "item.length": len(item_sequence),
-            "labels.ids": [next_item],
-            "labels.length": 1,
-        }
+            return {
+                "user.ids": sample["user.ids"],
+                "user.length": sample["user.length"],
+                "item.ids": item_sequence,
+                "item.length": len(item_sequence),
+                "positive.ids": next_item_sequence,
+                "positive.length": len(next_item_sequence),
+            }
+        else:
+            sample = copy.deepcopy(self._dataset[index])
+
+            item_sequence = sample["item.ids"][:-1]
+            next_item = sample["item.ids"][-1]
+
+            return {
+                "user.ids": sample["user.ids"],
+                "user.length": sample["user.length"],
+                "item.ids": item_sequence,
+                "item.length": len(item_sequence),
+                "labels.ids": [next_item],
+                "labels.length": 1,
+            }
 
 
 class GraphDataset:
@@ -462,23 +441,26 @@ class ScientificDataset:
             )
         )
 
-        train_sampler = TrainSampler.create_from_config(
+        train_sampler = SequenceSampler.create_from_config(
             config["samplers"],
             dataset=train_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx,
+            mode="train",
         )
-        validation_sampler = EvalSampler.create_from_config(
+        validation_sampler = SequenceSampler.create_from_config(
             config["samplers"],
             dataset=validation_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx,
+            mode="eval",
         )
-        test_sampler = EvalSampler.create_from_config(
+        test_sampler = SequenceSampler.create_from_config(
             config["samplers"],
             dataset=test_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx,
+            mode="eval",
         )
 
         return cls(
