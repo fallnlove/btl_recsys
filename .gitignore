@@ -214,3 +214,5 @@ outputs/*
 !outputs/.gitkeep
 optuna_outputs/*
 !optuna_outputs/.gitkeep
+*.gz
+new_data
