@@ -8,7 +8,7 @@ from tqdm import tqdm, trange
 import hydra
 
 from src.dataloader import TorchDataloader
-from src.dataset import GraphDataset, ScientificDataset
+from src.dataset import ScientificDataset, build_graph
 from src.inference import inference
 from src.loss import MRGSRecLoss
 from src.metrics import BaseMetric, StatefullMetric
@@ -129,7 +129,8 @@ def run_train(cfg):
     logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
     logger.info("Current DEVICE: {}".format(DEVICE))
 
-    dataset = GraphDataset.create_from_config(config["dataset"])
+    dataset = ScientificDataset.create_from_config(config["dataset"])
+    graph = build_graph(dataset, config["dataset"]["dataset"]["path_to_data_dir"])
 
     train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
 
@@ -149,7 +150,9 @@ def run_train(cfg):
         config["dataloader"]["validation"], dataset=test_sampler, **dataset.meta
     )
 
-    model = MRGSRecModel.create_from_config(config["model"], **dataset.meta).to(DEVICE)
+    model = MRGSRecModel.create_from_config(
+        config["model"], graph=graph, **dataset.meta
+    ).to(DEVICE)
     loss_function = MRGSRecLoss.create_from_config(config["loss"])
     optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
     optimizer_fi = BasicOptimizer.create_from_config(

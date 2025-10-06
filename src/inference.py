@@ -5,7 +5,6 @@ import numpy as np
 import torch
 
 from .dataloader import TorchDataloader
-from .dataset import GraphDataset
 from .loss import MRGSRecLoss
 from .metrics import BaseMetric, StatefullMetric
 from .model import MRGSRecModel
