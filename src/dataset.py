@@ -100,7 +100,7 @@ class GraphDataset:
         train_item_2_users = defaultdict(set)
         visited_user_item_pairs = set()
 
-        self._proccess_sampler(
+        self._process_sampler(
             train_sampler,
             visited_user_item_pairs,
             train_interactions,
@@ -112,7 +112,7 @@ class GraphDataset:
 
         if not self._use_train_data_only:
             for sampler in [validation_sampler, test_sampler]:
-                self._proccess_sampler(
+                self._process_sampler(
                     sampler,
                     visited_user_item_pairs,
                     train_interactions,
@@ -190,10 +190,10 @@ class GraphDataset:
     ):
         path_to_graph = os.path.join(graph_dir_path, "general_graph.npz")
         if os.path.exists(path_to_graph):
-            print(1)
+            logger.info("loading graph from file")
             return sp.load_npz(path_to_graph)
         else:
-            print(2)
+            logger.info("building new graph")
             # place ones only when co-occurrence happens
             user2item_connections = csr_matrix(
                 (
@@ -265,7 +265,7 @@ class GraphDataset:
         else:
             return None
 
-    def _proccess_sampler(
+    def _process_sampler(
         self,
         sampler,
         visited_user_item_pairs,
@@ -457,19 +457,16 @@ class ScientificDataset:
             num_items=max_item_idx,
             mode="train",
         )
-        validation_sampler = SequenceSampler.create_from_config(
-            config["samplers"],
-            dataset=validation_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx,
-            mode="eval",
-        )
-        test_sampler = SequenceSampler.create_from_config(
-            config["samplers"],
-            dataset=test_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx,
-            mode="eval",
+
+        validation_sampler, test_sampler = (
+            SequenceSampler.create_from_config(
+                config["samplers"],
+                dataset=sampler_dataset,
+                num_users=max_user_idx,
+                num_items=max_item_idx,
+                mode="eval",
+            )
+            for sampler_dataset in [validation_dataset, test_dataset]
         )
 
         return cls(
