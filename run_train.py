@@ -8,7 +8,7 @@ from tqdm import tqdm, trange
 import hydra
 
 from src.dataloader import TorchDataloader
-from src.dataset import GraphDataset
+from src.dataset import GraphDataset, ScientificDataset
 from src.inference import inference
 from src.loss import MRGSRecLoss
 from src.metrics import BaseMetric, StatefullMetric

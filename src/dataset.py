@@ -129,61 +129,6 @@ class GraphDataset:
         self._graph = self._build_general_graph(
             graph_dir_path, train_user_interactions, train_item_interactions
         )
-        self._user_graph = self._build_user_graph(graph_dir_path, train_item_2_users)
-        self._item_graph = self._build_item_graph(graph_dir_path, train_user_2_items)
-
-    def _build_item_graph(self, graph_dir_path, train_user_2_items):
-        if self._use_item_graph:
-            path_to_item_graph = os.path.join(graph_dir_path, "item_graph.npz")
-            if os.path.exists(path_to_item_graph):
-                return sp.load_npz(path_to_item_graph)
-            else:
-                item2item_interactions_fst = []
-                item2item_interactions_snd = []
-                visited_user_item_pairs = set()
-                visited_item_item_pairs = set()
-
-                for user_id, item_id in tqdm(
-                    zip(self._train_user_interactions, self._train_item_interactions)
-                ):
-                    if (user_id, item_id) in visited_user_item_pairs:
-                        continue  # process (user, item) pair only once
-                    visited_user_item_pairs.add((user_id, item_id))
-
-                    for connected_item_id in train_user_2_items[user_id]:
-                        if (
-                            item_id,
-                            connected_item_id,
-                        ) in visited_item_item_pairs or item_id == connected_item_id:
-                            continue  # add (item, item) to graph connections pair only once
-                        visited_item_item_pairs.add((item_id, connected_item_id))
-
-                        item2item_interactions_fst.append(item_id)
-                        item2item_interactions_snd.append(connected_item_id)
-
-                # (item, item) graph
-                item2item_connections = csr_matrix(
-                    (
-                        np.ones(len(item2item_interactions_fst)),
-                        (item2item_interactions_fst, item2item_interactions_snd),
-                    ),
-                    shape=(self._num_items + 2, self._num_items + 2),
-                )
-                self._item_graph = self.get_sparse_graph_layer(
-                    item2item_connections,
-                    self._num_items + 2,
-                    self._num_items + 2,
-                    biparite=False,
-                )
-                # sp.save_npz(path_to_item_graph, self._item_graph)
-
-            return (
-                self._convert_sp_mat_to_sp_tensor(self._item_graph)
-                .coalesce()
-                .to(DEVICE)
-            )
-        else:
-            return None
 
     def _build_general_graph(
         self, graph_dir_path, train_user_interactions, train_item_interactions
@@ -210,60 +155,6 @@ class GraphDataset:
             )
             # sp.save_npz(path_to_graph, self._graph)
             return self._convert_sp_mat_to_sp_tensor(self._graph).coalesce().to(DEVICE)
-
-    def _build_user_graph(self, graph_dir_path, train_item_2_users):
-        if self._use_user_graph:
-            path_to_user_graph = os.path.join(graph_dir_path, "user_graph.npz")
-            if os.path.exists(path_to_user_graph):
-                return sp.load_npz(path_to_user_graph)
-            else:
-                user2user_interactions_fst = []
-                user2user_interactions_snd = []
-                visited_user_item_pairs = set()
-                visited_user_user_pairs = set()
-
-                for user_id, item_id in tqdm(
-                    zip(self._train_user_interactions, self._train_item_interactions)
-                ):
-                    if (user_id, item_id) in visited_user_item_pairs:
-                        continue  # process (user, item) pair only once
-                    visited_user_item_pairs.add((user_id, item_id))
-
-                    for connected_user_id in train_item_2_users[item_id]:
-                        if (
-                            user_id,
-                            connected_user_id,
-                        ) in visited_user_user_pairs or user_id == connected_user_id:
-                            continue  # add (user, user) to graph connections pair only once
-                        visited_user_user_pairs.add((user_id, connected_user_id))
-
-                        user2user_interactions_fst.append(user_id)
-                        user2user_interactions_snd.append(connected_user_id)
-
-                # (user, user) graph
-                user2user_connections = csr_matrix(
-                    (
-                        np.ones(len(user2user_interactions_fst)),
-                        (user2user_interactions_fst, user2user_interactions_snd),
-                    ),
-                    shape=(self._num_users + 2, self._num_users + 2),
-                )
-
-                self._user_graph = self.get_sparse_graph_layer(
-                    user2user_connections,
-                    self._num_users + 2,
-                    self._num_users + 2,
-                    biparite=False,
-                )
-                # sp.save_npz(path_to_user_graph, self._user_graph)
-
-                return (
-                    self._convert_sp_mat_to_sp_tensor(self._user_graph)
-                    .coalesce()
-                    .to(DEVICE)
-                )
-        else:
-            return None
 
     def _process_sampler(
         self,
@@ -357,8 +248,6 @@ class GraphDataset:
     @property
     def meta(self):
         meta = {
-            "user_graph": self._user_graph,
-            "item_graph": self._item_graph,
             "graph": self._graph,
             **self._dataset.meta,
         }
@@ -437,6 +326,12 @@ class ScientificDataset:
             assert len(item_ids[-max_sequence_length:]) == len(
                 set(item_ids[-max_sequence_length:])
             )
+
+            # print(train_dataset[-1])
+            # print(validation_dataset[-1])
+            # print(test_dataset[-1])
+            # import sys
+            # sys.exit()
 
         logger.info("Train dataset size: {}".format(len(train_dataset)))
         logger.info("Test dataset size: {}".format(len(test_dataset)))
