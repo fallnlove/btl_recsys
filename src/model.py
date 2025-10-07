@@ -64,7 +64,7 @@ class MRGSRecModel(nn.Module):
             nhead=num_heads,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
-            activation=get_activation_function(activation),
+            activation=self._activation,
             layer_norm_eps=layer_norm_eps,
             batch_first=True,
         )
@@ -72,7 +72,7 @@ class MRGSRecModel(nn.Module):
 
         self._fusion_part = nn.Sequential(
             nn.Linear(2 * embedding_dim, dim_feedforward),
-            get_activation_function(activation),
+            self._activation,
             nn.Linear(dim_feedforward, embedding_dim),
         )
 
@@ -199,15 +199,69 @@ class MRGSRecModel(nn.Module):
         return padded_embeddings, padded_ego_embeddings, mask
 
     def forward(self, inputs, ind=None):
-        all_sample_events = inputs[
-            "{}.ids".format(self._sequence_prefix)
-        ]  # (all_batch_events)
-        all_sample_lengths = inputs[
-            "{}.length".format(self._sequence_prefix)
-        ]  # (batch_size)
-        user_ids = inputs["{}.ids".format(self._user_prefix)]  # (batch_size)
+        all_sample_events = inputs[f"{self._sequence_prefix}.ids"]  # (all_batch_events)
+        all_sample_lengths = inputs[f"{self._sequence_prefix}.length"]  # (batch_size)
+        user_ids = inputs[f"{self._user_prefix}.ids"]  # (batch_size)
 
-        # Sequential part
+        (
+            sequence_user_embeddings,
+            sequence_embeddings,
+            batch_size,
+            seq_len,
+            max_sequence_length,
+            mask,
+        ) = self._sequential_part(all_sample_events, all_sample_lengths, user_ids)
+
+        all_final_item_embeddings, graph_user_embeddings = self._graph_part(
+            ind, inputs, mask
+        )
+
+        # Fusion part
+        fusion_user_embeddings = self._fuse_embeddings(
+            sequence_user_embeddings, graph_user_embeddings
+        )
+
+        if self.training:  # training mode
+            return self._compute_training_outputs(
+                inputs,
+                max_sequence_length,
+                batch_size,
+                sequence_embeddings,
+                mask,
+                graph_user_embeddings,
+                fusion_user_embeddings,
+                all_final_item_embeddings,
+            )
+        else:
+            return self._compute_inference_outputs(fusion_user_embeddings)
+
+    def _graph_part(self, ind, inputs, mask):
+        # START:Graph part
+        all_final_user_embeddings, all_final_item_embeddings = (
+            self._apply_graph_encoder(ind)
+        )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
+
+        graph_user_embeddings, _, user_mask = self._get_embeddings(
+            inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+        graph_user_embeddings = graph_user_embeddings[
+            user_mask
+        ]  # (batch_size, embedding_dim)
+
+        graph_embeddings, _, item_mask = self._get_embeddings(
+            inputs,
+            self._sequence_prefix,
+            self._item_embeddings,
+            all_final_item_embeddings,
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+        # END: Graph part
+
+        assert torch.allclose(mask, item_mask)
+
+        return all_final_item_embeddings, graph_user_embeddings
+
+    def _sequential_part(self, all_sample_events, all_sample_lengths, user_ids):
+        # START:Sequential part
         sequence_embeddings = self._item_embeddings(
             all_sample_events
         )  # (all_batch_events, embedding_dim)
@@ -219,6 +273,57 @@ class MRGSRecModel(nn.Module):
         seq_len = mask.shape[1]
         max_sequence_length = all_sample_lengths.max().item()
 
+        sequence_embeddings = self._prepare_sequence_embeddings(
+            seq_len, mask, batch_size, all_sample_lengths, user_ids, sequence_embeddings
+        )
+
+        sequence_embeddings = self._encode_sequence(
+            seq_len, batch_size, mask, sequence_embeddings
+        )
+
+        sequence_user_embeddings, sequence_embeddings = (
+            sequence_embeddings[:, 0, :],
+            sequence_embeddings[:, 1:, :],
+        )  # (batch_size, embedding_dim), (batch_size, seq_len, embedding_dim)
+        # END:Sequential part
+
+        return (
+            sequence_user_embeddings,
+            sequence_embeddings,
+            batch_size,
+            seq_len,
+            max_sequence_length,
+            mask,
+        )
+
+    def _encode_sequence(self, seq_len, batch_size, mask, sequence_embeddings):
+        causal_mask = (
+            torch.tril(torch.ones(seq_len, seq_len)).bool().to(DEVICE)
+        )  # (seq_len, seq_len)
+        advanced_mask = torch.ones(
+            seq_len + 1, seq_len + 1, dtype=torch.bool, device=DEVICE
+        )  # (seq_len + 1, seq_len + 1)
+        advanced_mask[1:, 1:] = causal_mask
+        advanced_src_key_padding_mask = torch.cat(
+            [torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE), mask], dim=1
+        )  # (batch_size, seq_len + 1)
+        sequence_embeddings = self._encoder(
+            src=sequence_embeddings,
+            mask=~advanced_mask,
+            src_key_padding_mask=~advanced_src_key_padding_mask,
+        )  # (batch_size, seq_len + 1, embedding_dim)
+
+        return sequence_embeddings
+
+    def _prepare_sequence_embeddings(
+        self,
+        seq_len,
+        mask,
+        batch_size,
+        all_sample_lengths,
+        user_ids,
+        sequence_embeddings,
+    ):
         positions = (
             torch.arange(start=seq_len - 1, end=-1, step=-1, device=mask.device)[None]
             .tile([batch_size, 1])
@@ -256,52 +361,10 @@ class MRGSRecModel(nn.Module):
             [sequence_user_embeddings, sequence_embeddings], dim=1
         )  # (batch_size, seq_len + 1, embedding_dim)
 
-        causal_mask = (
-            torch.tril(torch.ones(seq_len, seq_len)).bool().to(DEVICE)
-        )  # (seq_len, seq_len)
-        advanced_mask = torch.ones(
-            seq_len + 1, seq_len + 1, dtype=torch.bool, device=DEVICE
-        )  # (seq_len + 1, seq_len + 1)
-        advanced_mask[1:, 1:] = causal_mask
-        advanced_src_key_padding_mask = torch.cat(
-            [torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE), mask], dim=1
-        )  # (batch_size, seq_len + 1)
-        sequence_embeddings = self._encoder(
-            src=sequence_embeddings,
-            mask=~advanced_mask,
-            src_key_padding_mask=~advanced_src_key_padding_mask,
-        )  # (batch_size, seq_len + 1, embedding_dim)
+        return sequence_embeddings
 
-        sequence_user_embeddings = sequence_embeddings[
-            :, 0, :
-        ]  # (batch_size, embedding_dim)
-        sequence_embeddings = sequence_embeddings[
-            :, 1:, :
-        ]  # (batch_size, seq_len, embedding_dim)
-
-        # Graph part
-        all_final_user_embeddings, all_final_item_embeddings = (
-            self._apply_graph_encoder(ind)
-        )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
-
-        graph_user_embeddings, _, user_mask = self._get_embeddings(
-            inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        graph_user_embeddings = graph_user_embeddings[
-            user_mask
-        ]  # (batch_size, embedding_dim)
-
-        graph_embeddings, _, item_mask = self._get_embeddings(
-            inputs,
-            self._sequence_prefix,
-            self._item_embeddings,
-            all_final_item_embeddings,
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-
-        assert torch.allclose(mask, item_mask)
-
-        # Fusion part
-        fusion_user_embeddings = self._fusion_part(
+    def _fuse_embeddings(self, sequence_user_embeddings, graph_user_embeddings):
+        return self._fusion_part(
             torch.cat(
                 [
                     sequence_user_embeddings,
@@ -311,82 +374,89 @@ class MRGSRecModel(nn.Module):
             )
         )  # (batch_size, embedding_dim)
 
-        # fusion_user_embeddings = sequence_user_embeddings
+    def _compute_inference_outputs(self, fusion_user_embeddings):
+        # b - batch_size, n - num_candidates, d - embedding_dim
+        candidate_scores = torch.einsum(
+            "bd,nd->bn", fusion_user_embeddings, self._item_embeddings.weight
+        )  # (batch_size, num_items + 2)
 
-        if self.training:  # training mode
-            all_positive_sample_events = inputs[
-                "{}.ids".format(self._positive_prefix)
-            ]  # (all_batch_events)
-            all_positive_sample_lengths = inputs[
-                "{}.length".format(self._positive_prefix)
-            ]  # (batch_size)
+        candidate_scores[:, 0] = -torch.inf
+        candidate_scores[:, self._num_items + 1 :] = -torch.inf
 
-            bpr_mask = (
-                torch.arange(end=max_sequence_length, device=DEVICE)[None].tile(
-                    [batch_size, 1]
-                )
-                < all_positive_sample_lengths[:, None]
-            )  # (batch_size, max_seq_len)
-            bpr_positive_user_ids = (
-                torch.arange(end=batch_size, device=DEVICE)[None]
-                .tile([max_sequence_length, 1])
-                .T
-            )  # (batch_size, max_seq_len)
-            bpr_positive_user_ids = bpr_positive_user_ids[
-                bpr_mask
-            ]  # (all_batch_events)
+        _, indices = torch.topk(
+            candidate_scores, k=20, dim=-1, largest=True
+        )  # (batch_size, 20)
 
-            # Sequential part
-            all_sample_sequence_embeddings = sequence_embeddings[
-                mask
-            ]  # (all_batch_events, embedding_dim)
+        return indices
 
-            sequence_scores = torch.einsum(
-                "ad,nd->an", all_sample_sequence_embeddings, all_final_item_embeddings
-            )  # (all_batch_events, num_items + 2)
+    def _compute_training_outputs(
+        self,
+        inputs,
+        max_sequence_length,
+        batch_size,
+        sequence_embeddings,
+        mask,
+        graph_user_embeddings,
+        fusion_user_embeddings,
+        all_final_item_embeddings,
+    ):
+        all_positive_sample_events = inputs[
+            f"{self._positive_prefix}.ids"
+        ]  # (all_batch_events)
+        all_positive_sample_lengths = inputs[
+            f"{self._positive_prefix}.length"
+        ]  # (batch_size)
 
-            # Graph part
-            graph_user_embeddings = graph_user_embeddings[
-                bpr_positive_user_ids
-            ]  # (all_batch_events, embedding_dim)
-            graph_scores = torch.einsum(
-                "ad,nd->an", graph_user_embeddings, all_final_item_embeddings
-            )  # (all_batch_events, num_items + 2)
-            graph_positive_scores = torch.gather(
-                input=graph_scores, dim=1, index=all_positive_sample_events[..., None]
-            )  # (all_batch_events, 1)
+        bpr_mask = (
+            torch.arange(end=max_sequence_length, device=DEVICE)[None].tile(
+                [batch_size, 1]
+            )
+            < all_positive_sample_lengths[:, None]
+        )  # (batch_size, max_seq_len)
+        bpr_positive_user_ids = (
+            torch.arange(end=batch_size, device=DEVICE)[None]
+            .tile([max_sequence_length, 1])
+            .T
+        )  # (batch_size, max_seq_len)
+        bpr_positive_user_ids = bpr_positive_user_ids[bpr_mask]  # (all_batch_events)
 
-            # Fusion part
-            fusion_user_embeddings = fusion_user_embeddings[
-                bpr_positive_user_ids
-            ]  # (all_batch_events, embedding_dim)
-            fusion_scores = torch.einsum(
-                "ad,nd->an", fusion_user_embeddings, self._item_embeddings.weight
-            )  # (all_batch_events, num_items + 2)
-            fusion_positive_scores = torch.gather(
-                input=fusion_scores, dim=1, index=all_positive_sample_events[..., None]
-            )  # (all_batch_events, 1)
+        # Sequential part
+        all_sample_sequence_embeddings = sequence_embeddings[
+            mask
+        ]  # (all_batch_events, embedding_dim)
 
-            return {
-                "local_prediction": sequence_scores,
-                "global_positive": graph_positive_scores,
-                "global_negative": graph_scores,
-                "contrastive_fst_embeddings": all_sample_sequence_embeddings,
-                "contrastive_snd_embeddings": graph_user_embeddings,
-                "fusion_positive": fusion_positive_scores,
-                "fusion_negative": fusion_scores,
-            }
-        else:
-            # b - batch_size, n - num_candidates, d - embedding_dim
-            candidate_scores = torch.einsum(
-                "bd,nd->bn", fusion_user_embeddings, self._item_embeddings.weight
-            )  # (batch_size, num_items + 2)
+        sequence_scores = torch.einsum(
+            "ad,nd->an", all_sample_sequence_embeddings, all_final_item_embeddings
+        )  # (all_batch_events, num_items + 2)
 
-            candidate_scores[:, 0] = -torch.inf
-            candidate_scores[:, self._num_items + 1 :] = -torch.inf
+        # Graph part
+        graph_user_embeddings = graph_user_embeddings[
+            bpr_positive_user_ids
+        ]  # (all_batch_events, embedding_dim)
+        graph_scores = torch.einsum(
+            "ad,nd->an", graph_user_embeddings, all_final_item_embeddings
+        )  # (all_batch_events, num_items + 2)
+        graph_positive_scores = torch.gather(
+            input=graph_scores, dim=1, index=all_positive_sample_events[..., None]
+        )  # (all_batch_events, 1)
 
-            _, indices = torch.topk(
-                candidate_scores, k=20, dim=-1, largest=True
-            )  # (batch_size, 20)
+        # Fusion part
+        fusion_user_embeddings = fusion_user_embeddings[
+            bpr_positive_user_ids
+        ]  # (all_batch_events, embedding_dim)
+        fusion_scores = torch.einsum(
+            "ad,nd->an", fusion_user_embeddings, self._item_embeddings.weight
+        )  # (all_batch_events, num_items + 2)
+        fusion_positive_scores = torch.gather(
+            input=fusion_scores, dim=1, index=all_positive_sample_events[..., None]
+        )  # (all_batch_events, 1)
 
-            return indices
+        return {
+            "local_prediction": sequence_scores,
+            "global_positive": graph_positive_scores,
+            "global_negative": graph_scores,
+            "contrastive_fst_embeddings": all_sample_sequence_embeddings,
+            "contrastive_snd_embeddings": graph_user_embeddings,
+            "fusion_positive": fusion_positive_scores,
+            "fusion_negative": fusion_scores,
+        }
