@@ -62,7 +62,7 @@ class NDCGMetric(BaseMetric, config_name="ndcg"):
         ).to(
             hits.device
         )  # (k)
-        dcg = torch.einsum("bk,k->b", hits, discount_factor)  # (batch_size)
+        dcg = hits @ discount_factor  # (batch_size)
 
         return dcg.cpu().tolist()
 

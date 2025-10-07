@@ -357,9 +357,8 @@ class MRGSRecModel(nn.Module):
 
     def _compute_inference_outputs(self, fusion_user_embeddings):
         # b - batch_size, n - num_candidates, d - embedding_dim
-        candidate_scores = torch.einsum(
-            "bd,nd->bn", fusion_user_embeddings, self._item_embeddings.weight
-        )  # (batch_size, num_items + 2)
+        candidate_scores = fusion_user_embeddings @ self._item_embeddings.weight.T
+        # (batch_size, num_items + 2)
 
         candidate_scores[:, 0] = -torch.inf
         candidate_scores[:, self._num_items + 1 :] = -torch.inf
@@ -403,17 +402,15 @@ class MRGSRecModel(nn.Module):
             mask
         ]  # (all_batch_events, embedding_dim)
 
-        sequence_scores = torch.einsum(
-            "ad,nd->an", all_sample_sequence_embeddings, all_final_item_embeddings
-        )  # (all_batch_events, num_items + 2)
+        sequence_scores = all_sample_sequence_embeddings @ all_final_item_embeddings.T
+        # (all_batch_events, num_items + 2)
 
         # Graph part
         graph_user_embeddings = graph_user_embeddings[
             bpr_positive_user_ids
         ]  # (all_batch_events, embedding_dim)
-        graph_scores = torch.einsum(
-            "ad,nd->an", graph_user_embeddings, all_final_item_embeddings
-        )  # (all_batch_events, num_items + 2)
+        graph_scores = graph_user_embeddings @ all_final_item_embeddings.T
+        # (all_batch_events, num_items + 2)
         graph_positive_scores = torch.gather(
             input=graph_scores, dim=1, index=all_positive_sample_events[..., None]
         )  # (all_batch_events, 1)
@@ -422,9 +419,8 @@ class MRGSRecModel(nn.Module):
         fusion_user_embeddings = fusion_user_embeddings[
             bpr_positive_user_ids
         ]  # (all_batch_events, embedding_dim)
-        fusion_scores = torch.einsum(
-            "ad,nd->an", fusion_user_embeddings, self._item_embeddings.weight
-        )  # (all_batch_events, num_items + 2)
+        fusion_scores = fusion_user_embeddings @ self._item_embeddings.weight.T
+        # (all_batch_events, num_items + 2)
         fusion_positive_scores = torch.gather(
             input=fusion_scores, dim=1, index=all_positive_sample_events[..., None]
         )  # (all_batch_events, 1)
