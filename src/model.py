@@ -137,6 +137,86 @@ class MRGSRecModel(nn.Module):
             assert False
         return last_embeddings
 
+    def _get_embeddings(self, inputs, prefix, ego_embeddings, final_embeddings):
+        ids = inputs["{}.ids".format(prefix)]  # (all_batch_events)
+        lengths = inputs["{}.length".format(prefix)]  # (batch_size)
+
+        final_embeddings = final_embeddings[ids]  # (all_batch_events, embedding_dim)
+        ego_embeddings = ego_embeddings(ids)  # (all_batch_events, embedding_dim)
+
+        padded_embeddings, mask = create_masked_tensor(
+            final_embeddings, lengths
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+
+        padded_ego_embeddings, ego_mask = create_masked_tensor(
+            ego_embeddings, lengths
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+
+        assert torch.all(mask == ego_mask)
+
+        return padded_embeddings, padded_ego_embeddings, mask
+
+    def forward(self, inputs, ind=None):
+        all_sample_events = inputs[f"{self._sequence_prefix}.ids"]  # (all_batch_events)
+        all_sample_lengths = inputs[f"{self._sequence_prefix}.length"]  # (batch_size)
+
+        sequence_embeddings = self._item_embeddings(
+            all_sample_events
+        )  # (all_batch_events, embedding_dim)
+        sequence_embeddings, mask = create_masked_tensor(
+            data=sequence_embeddings, lengths=all_sample_lengths
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+
+        inputs["sequence_embeddings"] = sequence_embeddings
+        inputs["mask"] = mask
+
+        sequence_user_embeddings, sequence_embeddings = self._sequential_part(inputs)
+
+        all_final_item_embeddings, graph_user_embeddings = self._graph_part(ind, inputs)
+
+        # Fusion part
+        fusion_user_embeddings = self._fuse_embeddings(
+            sequence_user_embeddings, graph_user_embeddings
+        )
+
+        if self.training:  # training mode
+            return self._compute_training_outputs(
+                inputs,
+                sequence_embeddings,
+                graph_user_embeddings,
+                fusion_user_embeddings,
+                all_final_item_embeddings,
+            )
+        else:
+            return self._compute_inference_outputs(fusion_user_embeddings)
+
+    def _graph_part(self, ind, inputs):
+        mask = inputs["mask"]
+        # START:Graph part
+        all_final_user_embeddings, all_final_item_embeddings = (
+            self._apply_graph_encoder(ind)
+        )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
+
+        graph_user_embeddings, _, user_mask = self._get_embeddings(
+            inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+        graph_user_embeddings = graph_user_embeddings[
+            user_mask
+        ]  # (batch_size, embedding_dim)
+
+        # TODO: for what? just for check?
+        graph_embeddings, _, item_mask = self._get_embeddings(
+            inputs,
+            self._sequence_prefix,
+            self._item_embeddings,
+            all_final_item_embeddings,
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+        # END: Graph part
+
+        assert torch.allclose(mask, item_mask)
+
+        return all_final_item_embeddings, graph_user_embeddings
+
     def _apply_graph_encoder(self, ind=None):
         ego_embeddings = torch.cat(
             (self._user_embeddings.weight, self._item_embeddings.weight), dim=0
@@ -179,100 +259,15 @@ class MRGSRecModel(nn.Module):
 
         return user_final_embeddings, item_final_embeddings
 
-    def _get_embeddings(self, inputs, prefix, ego_embeddings, final_embeddings):
-        ids = inputs["{}.ids".format(prefix)]  # (all_batch_events)
-        lengths = inputs["{}.length".format(prefix)]  # (batch_size)
-
-        final_embeddings = final_embeddings[ids]  # (all_batch_events, embedding_dim)
-        ego_embeddings = ego_embeddings(ids)  # (all_batch_events, embedding_dim)
-
-        padded_embeddings, mask = create_masked_tensor(
-            final_embeddings, lengths
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-
-        padded_ego_embeddings, ego_mask = create_masked_tensor(
-            ego_embeddings, lengths
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-
-        assert torch.all(mask == ego_mask)
-
-        return padded_embeddings, padded_ego_embeddings, mask
-
-    def forward(self, inputs, ind=None):
-        all_sample_events = inputs[f"{self._sequence_prefix}.ids"]  # (all_batch_events)
-        all_sample_lengths = inputs[f"{self._sequence_prefix}.length"]  # (batch_size)
-        user_ids = inputs[f"{self._user_prefix}.ids"]  # (batch_size)
-
-        (
-            sequence_user_embeddings,
-            sequence_embeddings,
-            batch_size,
-            seq_len,
-            max_sequence_length,
-            mask,
-        ) = self._sequential_part(all_sample_events, all_sample_lengths, user_ids)
-
-        all_final_item_embeddings, graph_user_embeddings = self._graph_part(
-            ind, inputs, mask
-        )
-
-        # Fusion part
-        fusion_user_embeddings = self._fuse_embeddings(
-            sequence_user_embeddings, graph_user_embeddings
-        )
-
-        if self.training:  # training mode
-            return self._compute_training_outputs(
-                inputs,
-                max_sequence_length,
-                batch_size,
-                sequence_embeddings,
-                mask,
-                graph_user_embeddings,
-                fusion_user_embeddings,
-                all_final_item_embeddings,
-            )
-        else:
-            return self._compute_inference_outputs(fusion_user_embeddings)
-
-    def _graph_part(self, ind, inputs, mask):
-        # START:Graph part
-        all_final_user_embeddings, all_final_item_embeddings = (
-            self._apply_graph_encoder(ind)
-        )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
-
-        graph_user_embeddings, _, user_mask = self._get_embeddings(
-            inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        graph_user_embeddings = graph_user_embeddings[
-            user_mask
-        ]  # (batch_size, embedding_dim)
-
-        graph_embeddings, _, item_mask = self._get_embeddings(
-            inputs,
-            self._sequence_prefix,
-            self._item_embeddings,
-            all_final_item_embeddings,
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        # END: Graph part
-
-        assert torch.allclose(mask, item_mask)
-
-        return all_final_item_embeddings, graph_user_embeddings
-
-    def _sequential_part(self, all_sample_events, all_sample_lengths, user_ids):
-        # START:Sequential part
-        sequence_embeddings = self._item_embeddings(
-            all_sample_events
-        )  # (all_batch_events, embedding_dim)
-        sequence_embeddings, mask = create_masked_tensor(
-            data=sequence_embeddings, lengths=all_sample_lengths
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-
+    def _sequential_part(self, inputs):
+        mask = inputs["mask"]
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
-        max_sequence_length = all_sample_lengths.max().item()
+        all_sample_lengths = inputs[f"{self._sequence_prefix}.length"]
+        user_ids = inputs[f"{self._user_prefix}.ids"]
+        sequence_embeddings = inputs["sequence_embeddings"]
 
+        # START:Sequential part
         sequence_embeddings = self._prepare_sequence_embeddings(
             seq_len, mask, batch_size, all_sample_lengths, user_ids, sequence_embeddings
         )
@@ -290,10 +285,6 @@ class MRGSRecModel(nn.Module):
         return (
             sequence_user_embeddings,
             sequence_embeddings,
-            batch_size,
-            seq_len,
-            max_sequence_length,
-            mask,
         )
 
     def _encode_sequence(self, seq_len, batch_size, mask, sequence_embeddings):
@@ -392,14 +383,15 @@ class MRGSRecModel(nn.Module):
     def _compute_training_outputs(
         self,
         inputs,
-        max_sequence_length,
-        batch_size,
         sequence_embeddings,
-        mask,
         graph_user_embeddings,
         fusion_user_embeddings,
         all_final_item_embeddings,
     ):
+        mask = inputs["mask"]
+        batch_size = mask.shape[0]
+        max_sequence_length = mask.shape[1]
+
         all_positive_sample_events = inputs[
             f"{self._positive_prefix}.ids"
         ]  # (all_batch_events)
