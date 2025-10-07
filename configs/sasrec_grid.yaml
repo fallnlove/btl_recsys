@@ -27,10 +27,6 @@ dataloader:
     shuffle: false
 model:
   type: sasrec
-  sequence_prefix: item
-  positive_prefix: positive
-  negative_prefix: negative
-  candidate_prefix: candidates
   embedding_dim: 8
   num_heads: 2
   num_layers: 2
@@ -65,7 +61,6 @@ callback:
     loss_prefix: loss
   - type: validation
     on_step: 64
-    pred_prefix: logits
     labels_prefix: labels
     metrics:
       ndcg@5:
@@ -97,7 +92,6 @@ callback:
         k: 20
   - type: eval
     on_step: 256
-    pred_prefix: logits
     labels_prefix: labels
     metrics:
       ndcg@5:

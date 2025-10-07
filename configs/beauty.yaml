@@ -26,9 +26,6 @@ dataloader:
     drop_last: false
     shuffle: false
 model:
-  sequence_prefix: item
-  user_prefix: user
-  positive_prefix: positive
   embedding_dim: 64
   num_heads: 2
   num_layers: 2
@@ -63,6 +60,4 @@ metrics:
   ndcg@10:
     type: ndcg
     k: 10
-pred_prefix: logits
-label_prefix: labels
 

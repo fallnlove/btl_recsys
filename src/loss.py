@@ -4,14 +4,13 @@ import torch.nn as nn
 
 class LocalObjective:
 
-    def __init__(self, predictions_prefix, labels_prefix):
-        self._pred_prefix = predictions_prefix
+    def __init__(self, labels_prefix):
         self._labels_prefix = labels_prefix
 
         self._loss = nn.CrossEntropyLoss()
 
     def __call__(self, inputs):
-        all_logits = inputs[self._pred_prefix]  # (all_items, num_classes)
+        all_logits = inputs["local_prediction"]  # (all_items, num_classes)
         all_labels = inputs["{}.ids".format(self._labels_prefix)]  # (all_items)
         assert all_logits.shape[0] == all_labels.shape[0]
 
@@ -156,7 +155,6 @@ class MRGSRecLoss:
     def create_from_config(cls, config, **kwargs):
         return cls(
             local_objective=LocalObjective(
-                predictions_prefix=config["local"]["predictions_prefix"],
                 labels_prefix=config["local"]["labels_prefix"],
             ),
             global_objective=GlobalObjective(

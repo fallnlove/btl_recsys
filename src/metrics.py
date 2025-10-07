@@ -46,11 +46,11 @@ class NDCGMetric(BaseMetric, config_name="ndcg"):
     def __init__(self, k):
         self._k = k
 
-    def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix][
+    def __call__(self, inputs):
+        predictions = inputs["logits"][
             :, : self._k
         ].float()  # (batch_size, top_k_indices)
-        labels = inputs["{}.ids".format(labels_prefix)].float()  # (batch_size)
+        labels = inputs["labels.ids"].float()  # (batch_size)
 
         assert labels.shape[0] == predictions.shape[0]
 
@@ -72,11 +72,11 @@ class RecallMetric(BaseMetric, config_name="recall"):
     def __init__(self, k):
         self._k = k
 
-    def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix][
+    def __call__(self, inputs):
+        predictions = inputs["logits"][
             :, : self._k
         ].float()  # (batch_size, top_k_indices)
-        labels = inputs["{}.ids".format(labels_prefix)].float()  # (batch_size)
+        labels = inputs["labels.ids"].float()  # (batch_size)
 
         assert labels.shape[0] == predictions.shape[0]
 
@@ -98,8 +98,8 @@ class CoverageMetric(StatefullMetric, config_name="coverage"):
     def create_from_config(cls, config, **kwargs):
         return cls(k=config["k"], num_items=kwargs["num_items"])
 
-    def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix][
+    def __call__(self, inputs):
+        predictions = inputs["logits"][
             :, : self._k
         ].float()  # (batch_size, top_k_indices)
         return predictions.view(-1).long().cpu().detach().tolist()  # (batch_size * k)

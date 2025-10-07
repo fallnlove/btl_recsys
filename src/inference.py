@@ -12,7 +12,7 @@ from .optimizer import BasicOptimizer
 from .utils import DEVICE, create_logger, fix_random_seed, parse_args
 
 
-def inference(dataloader, model, metrics, pred_prefix, labels_prefix):
+def inference(dataloader, model, metrics):
     running_metrics = {}
     for metric_name, metric_function in metrics.items():
         running_metrics[metric_name] = []
@@ -24,19 +24,13 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix):
 
             for key, value in batch.items():
                 batch[key] = value.to(DEVICE)
-            batch[pred_prefix] = model(batch)
+            batch["logits"] = model(batch)
 
             for key, values in batch.items():
                 batch[key] = values.cpu()
 
             for metric_name, metric_function in metrics.items():
-                running_metrics[metric_name].extend(
-                    metric_function(
-                        inputs=batch,
-                        pred_prefix=pred_prefix,
-                        labels_prefix=labels_prefix,
-                    )
-                )
+                running_metrics[metric_name].extend(metric_function(inputs=batch))
 
         for metric_name, metric_function in metrics.items():
             if isinstance(metric_function, StatefullMetric):

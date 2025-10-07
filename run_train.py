@@ -170,8 +170,6 @@ def run_train(cfg):
         dataloader=validation_dataloader,
         model=model,
         metrics=metrics,
-        pred_prefix=config["pred_prefix"],
-        labels_prefix=config["label_prefix"],
     )
 
     # Train process

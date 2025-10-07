@@ -10,9 +10,6 @@ class MRGSRecModel(nn.Module):
 
     def __init__(
         self,
-        sequence_prefix,
-        user_prefix,
-        positive_prefix,
         num_items,
         num_users,
         max_sequence_length,
@@ -27,10 +24,6 @@ class MRGSRecModel(nn.Module):
         initializer_range=0.02,
     ):
         super().__init__()
-        self._sequence_prefix = sequence_prefix
-        self._user_prefix = user_prefix
-        self._positive_prefix = positive_prefix
-
         self._num_items = num_items
         self._num_users = num_users
         self._max_sequence_length = max_sequence_length
@@ -81,9 +74,6 @@ class MRGSRecModel(nn.Module):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            sequence_prefix=config["sequence_prefix"],
-            user_prefix=config["user_prefix"],
-            positive_prefix=config["positive_prefix"],
             num_items=kwargs["num_items"],
             num_users=kwargs["num_users"],
             max_sequence_length=kwargs["max_sequence_length"],
@@ -137,10 +127,7 @@ class MRGSRecModel(nn.Module):
             assert False
         return last_embeddings
 
-    def _get_embeddings(self, inputs, prefix, ego_embeddings, final_embeddings):
-        ids = inputs["{}.ids".format(prefix)]  # (all_batch_events)
-        lengths = inputs["{}.length".format(prefix)]  # (batch_size)
-
+    def _get_embeddings(self, ids, lengths, ego_embeddings, final_embeddings):
         final_embeddings = final_embeddings[ids]  # (all_batch_events, embedding_dim)
         ego_embeddings = ego_embeddings(ids)  # (all_batch_events, embedding_dim)
 
@@ -157,8 +144,8 @@ class MRGSRecModel(nn.Module):
         return padded_embeddings, padded_ego_embeddings, mask
 
     def forward(self, inputs, ind=None):
-        all_sample_events = inputs[f"{self._sequence_prefix}.ids"]  # (all_batch_events)
-        all_sample_lengths = inputs[f"{self._sequence_prefix}.length"]  # (batch_size)
+        all_sample_events = inputs[f"item.ids"]  # (all_batch_events)
+        all_sample_lengths = inputs[f"item.length"]  # (batch_size)
 
         sequence_embeddings = self._item_embeddings(
             all_sample_events
@@ -198,7 +185,10 @@ class MRGSRecModel(nn.Module):
         )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
 
         graph_user_embeddings, _, user_mask = self._get_embeddings(
-            inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
+            inputs["user.ids"],
+            inputs["user.length"],
+            self._user_embeddings,
+            all_final_user_embeddings,
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
         graph_user_embeddings = graph_user_embeddings[
             user_mask
@@ -206,8 +196,8 @@ class MRGSRecModel(nn.Module):
 
         # TODO: for what? just for check?
         graph_embeddings, _, item_mask = self._get_embeddings(
-            inputs,
-            self._sequence_prefix,
+            inputs["item.ids"],
+            inputs["item.length"],
             self._item_embeddings,
             all_final_item_embeddings,
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
@@ -263,8 +253,8 @@ class MRGSRecModel(nn.Module):
         mask = inputs["mask"]
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
-        all_sample_lengths = inputs[f"{self._sequence_prefix}.length"]
-        user_ids = inputs[f"{self._user_prefix}.ids"]
+        all_sample_lengths = inputs[f"item.length"]
+        user_ids = inputs[f"user.ids"]
         sequence_embeddings = inputs["sequence_embeddings"]
 
         # START:Sequential part
@@ -392,12 +382,8 @@ class MRGSRecModel(nn.Module):
         batch_size = mask.shape[0]
         max_sequence_length = mask.shape[1]
 
-        all_positive_sample_events = inputs[
-            f"{self._positive_prefix}.ids"
-        ]  # (all_batch_events)
-        all_positive_sample_lengths = inputs[
-            f"{self._positive_prefix}.length"
-        ]  # (batch_size)
+        all_positive_sample_events = inputs[f"positive.ids"]  # (all_batch_events)
+        all_positive_sample_lengths = inputs[f"positive.length"]  # (batch_size)
 
         bpr_mask = (
             torch.arange(end=max_sequence_length, device=DEVICE)[None].tile(
