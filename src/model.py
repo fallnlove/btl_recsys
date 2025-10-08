@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn import MultiheadAttention
 
 from .utils import DEVICE, create_masked_tensor, get_activation_function
+from .graph import GraphEncoder
 
 
 class MRGSRecModel(nn.Module):
@@ -30,9 +29,9 @@ class MRGSRecModel(nn.Module):
         self._embedding_dim = embedding_dim
         self._num_heads = num_heads
         self._num_layers = num_layers
-        self._graph = graph
-        self._dropout_rate = dropout
         self._activation = get_activation_function(activation)
+
+        self._graph_encoder = GraphEncoder(graph, dropout, num_users, num_items)
 
         self._user_embeddings = nn.Embedding(
             num_embeddings=self._num_users + 2, embedding_dim=self._embedding_dim
@@ -159,15 +158,19 @@ class MRGSRecModel(nn.Module):
 
         sequence_user_embeddings, sequence_embeddings = self._sequential_part(inputs)
 
-        graph_enriched_user_embeddings, graph_enriched_item_embeddings = (
-            self._apply_graph_encoder(ind)
+        # All embeddings after graph part
+        all_graph_enriched_user_embeddings, all_graph_enriched_item_embeddings = (
+            self._graph_encoder(self._user_embeddings, self._item_embeddings, ind)
         )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
 
-        graph_user_embeddings = graph_enriched_user_embeddings[inputs["user.ids"]]
+        # Enriched embeddings of users from batch
+        batch_graph_enriched_user_embeddings = all_graph_enriched_user_embeddings[
+            inputs["user.ids"]
+        ]
 
         # Fusion part
         fusion_user_embeddings = self._fuse_embeddings(
-            sequence_user_embeddings, graph_user_embeddings
+            sequence_user_embeddings, batch_graph_enriched_user_embeddings
         )
 
         # print(f"{fusion_user_embeddings.shape=}")
@@ -180,54 +183,12 @@ class MRGSRecModel(nn.Module):
             return self._compute_training_outputs(
                 inputs,
                 sequence_embeddings,
-                graph_user_embeddings,
+                batch_graph_enriched_user_embeddings,
                 fusion_user_embeddings,
-                graph_enriched_item_embeddings,
+                all_graph_enriched_item_embeddings,
             )
         else:
             return self._compute_inference_outputs(fusion_user_embeddings)
-
-    def _apply_graph_encoder(self, ind=None):
-        ego_embeddings = torch.cat(
-            (self._user_embeddings.weight, self._item_embeddings.weight), dim=0
-        )
-        if ind is not None:
-            ego_embeddings = torch.cat(
-                (
-                    ego_embeddings[:ind],
-                    self._newuser_embeddings.weight,
-                    ego_embeddings[ind + 1 :],
-                ),
-                dim=0,
-            )
-        all_embeddings = [ego_embeddings]
-
-        if self._dropout_rate > 0:  # drop some edges
-            if self.training:  # training_mode
-                size = self._graph.size()
-                index = self._graph.indices().t()
-                values = self._graph.values()
-                random_index = torch.rand(len(values)) + (1 - self._dropout_rate)
-                random_index = random_index.int().bool()
-                index = index[random_index]
-                values = values[random_index] / (1 - self._dropout_rate)
-                graph_dropped = torch.sparse.FloatTensor(index.t(), values, size)
-            else:  # eval mode
-                graph_dropped = self._graph
-        else:
-            graph_dropped = self._graph
-
-        for i in range(1):
-            ego_embeddings = torch.sparse.mm(graph_dropped, ego_embeddings)
-            norm_embeddings = F.normalize(ego_embeddings, p=2, dim=1)
-            all_embeddings += [norm_embeddings]
-
-        all_embeddings = torch.mean(torch.stack(all_embeddings, dim=-1), dim=-1)
-        user_final_embeddings, item_final_embeddings = torch.split(
-            all_embeddings, [self._num_users + 2, self._num_items + 2]
-        )
-
-        return user_final_embeddings, item_final_embeddings
 
     def _sequential_part(self, inputs):
         mask = inputs["mask"]
