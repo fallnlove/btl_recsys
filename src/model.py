@@ -159,12 +159,22 @@ class MRGSRecModel(nn.Module):
 
         sequence_user_embeddings, sequence_embeddings = self._sequential_part(inputs)
 
-        all_final_item_embeddings, graph_user_embeddings = self._graph_part(ind, inputs)
+        graph_enriched_user_embeddings, graph_enriched_item_embeddings = (
+            self._apply_graph_encoder(ind)
+        )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
+
+        graph_user_embeddings = graph_enriched_user_embeddings[inputs["user.ids"]]
 
         # Fusion part
         fusion_user_embeddings = self._fuse_embeddings(
             sequence_user_embeddings, graph_user_embeddings
         )
+
+        # print(f"{fusion_user_embeddings.shape=}")
+        # print(f"{graph_enriched_item_embeddings.shape=}")
+        # print(f"{graph_user_embeddings.shape=}")
+        # print(f"{sequence_user_embeddings.shape=}")
+        # print(f"{sequence_embeddings.shape=}")
 
         if self.training:  # training mode
             return self._compute_training_outputs(
@@ -172,40 +182,10 @@ class MRGSRecModel(nn.Module):
                 sequence_embeddings,
                 graph_user_embeddings,
                 fusion_user_embeddings,
-                all_final_item_embeddings,
+                graph_enriched_item_embeddings,
             )
         else:
             return self._compute_inference_outputs(fusion_user_embeddings)
-
-    def _graph_part(self, ind, inputs):
-        mask = inputs["mask"]
-        # START:Graph part
-        all_final_user_embeddings, all_final_item_embeddings = (
-            self._apply_graph_encoder(ind)
-        )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
-
-        graph_user_embeddings, _, user_mask = self._get_embeddings(
-            inputs["user.ids"],
-            inputs["user.length"],
-            self._user_embeddings,
-            all_final_user_embeddings,
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        graph_user_embeddings = graph_user_embeddings[
-            user_mask
-        ]  # (batch_size, embedding_dim)
-
-        # TODO: for what? just for check?
-        graph_embeddings, _, item_mask = self._get_embeddings(
-            inputs["item.ids"],
-            inputs["item.length"],
-            self._item_embeddings,
-            all_final_item_embeddings,
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        # END: Graph part
-
-        assert torch.allclose(mask, item_mask)
-
-        return all_final_item_embeddings, graph_user_embeddings
 
     def _apply_graph_encoder(self, ind=None):
         ego_embeddings = torch.cat(
@@ -384,6 +364,45 @@ class MRGSRecModel(nn.Module):
         all_positive_sample_events = inputs[f"positive.ids"]  # (all_batch_events)
         all_positive_sample_lengths = inputs[f"positive.length"]  # (batch_size)
 
+        bpr_positive_user_ids = self._get_bpr_positive_user_ids(
+            max_sequence_length, batch_size, all_positive_sample_lengths
+        )
+
+        # Sequential part
+        all_sample_sequence_embeddings = sequence_embeddings[
+            mask
+        ]  # (all_batch_events, embedding_dim)
+
+        # TODO: test with original and tune L_c coef
+        sequence_scores = all_sample_sequence_embeddings @ all_final_item_embeddings.T
+        # (all_batch_events, num_items + 2)
+
+        graph_positive_scores, graph_scores, graph_user_embeddings = (
+            self._get_graph_scores(
+                graph_user_embeddings,
+                bpr_positive_user_ids,
+                all_final_item_embeddings,
+                all_positive_sample_events,
+            )
+        )
+
+        fusion_positive_scores, fusion_scores = self._get_fusion_scores(
+            fusion_user_embeddings, bpr_positive_user_ids, all_positive_sample_events
+        )
+
+        return {
+            "local_prediction": sequence_scores,
+            "global_positive": graph_positive_scores,
+            "global_negative": graph_scores,
+            "contrastive_fst_embeddings": all_sample_sequence_embeddings,
+            "contrastive_snd_embeddings": graph_user_embeddings,
+            "fusion_positive": fusion_positive_scores,
+            "fusion_negative": fusion_scores,
+        }
+
+    def _get_bpr_positive_user_ids(
+        self, max_sequence_length, batch_size, all_positive_sample_lengths
+    ):
         bpr_mask = (
             torch.arange(end=max_sequence_length, device=DEVICE)[None].tile(
                 [batch_size, 1]
@@ -397,16 +416,15 @@ class MRGSRecModel(nn.Module):
         )  # (batch_size, max_seq_len)
         bpr_positive_user_ids = bpr_positive_user_ids[bpr_mask]  # (all_batch_events)
 
-        # Sequential part
-        all_sample_sequence_embeddings = sequence_embeddings[
-            mask
-        ]  # (all_batch_events, embedding_dim)
+        return bpr_positive_user_ids
 
-        # TODO: test with original and tune L_c coef
-        sequence_scores = all_sample_sequence_embeddings @ all_final_item_embeddings.T
-        # (all_batch_events, num_items + 2)
-
-        # Graph part
+    def _get_graph_scores(
+        self,
+        graph_user_embeddings,
+        bpr_positive_user_ids,
+        all_final_item_embeddings,
+        all_positive_sample_events,
+    ):
         graph_user_embeddings = graph_user_embeddings[
             bpr_positive_user_ids
         ]  # (all_batch_events, embedding_dim)
@@ -416,7 +434,11 @@ class MRGSRecModel(nn.Module):
             input=graph_scores, dim=1, index=all_positive_sample_events[..., None]
         )  # (all_batch_events, 1)
 
-        # Fusion part
+        return graph_positive_scores, graph_scores, graph_user_embeddings
+
+    def _get_fusion_scores(
+        self, fusion_user_embeddings, bpr_positive_user_ids, all_positive_sample_events
+    ):
         fusion_user_embeddings = fusion_user_embeddings[
             bpr_positive_user_ids
         ]  # (all_batch_events, embedding_dim)
@@ -426,12 +448,4 @@ class MRGSRecModel(nn.Module):
             input=fusion_scores, dim=1, index=all_positive_sample_events[..., None]
         )  # (all_batch_events, 1)
 
-        return {
-            "local_prediction": sequence_scores,
-            "global_positive": graph_positive_scores,
-            "global_negative": graph_scores,
-            "contrastive_fst_embeddings": all_sample_sequence_embeddings,
-            "contrastive_snd_embeddings": graph_user_embeddings,
-            "fusion_positive": fusion_positive_scores,
-            "fusion_negative": fusion_scores,
-        }
+        return fusion_positive_scores, fusion_scores
