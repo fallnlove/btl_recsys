@@ -7,6 +7,7 @@ class LocalObjective:
     def __init__(self, labels_prefix):
         self._labels_prefix = labels_prefix
 
+        # TODO: add scalable softmax
         self._loss = nn.CrossEntropyLoss()
 
     def __call__(self, inputs):
