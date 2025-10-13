@@ -304,6 +304,11 @@ class ScientificDataset:
                 set(item_ids[-self._max_sequence_length :])
             )
 
+        print(f"{len(train_dataset)=}")
+        print(f"{len(validation_dataset)=}")
+        print(f"{len(test_dataset)=}")
+
+
         return (
             train_dataset,
             validation_dataset,

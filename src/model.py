@@ -63,7 +63,9 @@ class MRGSRecModel(nn.Module):
             self._activation,
             layer_norm_eps,
             num_layers,
+            self._num_items,
             self._position_embeddings,
+            self._item_embeddings,
         )
 
         self._fusion_part = nn.Sequential(
@@ -206,7 +208,7 @@ class MRGSRecModel(nn.Module):
         )  # (batch_size, seq_len + 1, embedding_dim)
 
         sequence_embeddings = self._sequential_encoder._encode_sequence(
-            seq_len, batch_size, mask, sequence_embeddings
+            seq_len, batch_size, mask, sequence_embeddings, True
         )
 
         sequence_user_embeddings, sequence_embeddings = (
