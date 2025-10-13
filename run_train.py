@@ -6,8 +6,9 @@ import hydra
 import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm, trange
+from src.utils import BasicBatchProcessor
+from torch.utils.data import DataLoader
 
-from src.dataloader import TorchDataloader
 from src.dataset import ScientificDataset, build_graph
 from src.inference import inference
 from src.loss import MRGSRecLoss
@@ -41,9 +42,11 @@ def train(
     train_start = time.time()
     best_metric = 0.0
     best_epoch = 0
-    for epoch_num in trange(num_epochs):
+    for epoch_num in range(num_epochs):
         logger.debug(f"Start epoch {epoch_num}")
-        for step, batch in tqdm(enumerate(dataloader)):
+        for step, batch in tqdm(
+            enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch_num}"
+        ):
             model.train()
             move_batch(batch, DEVICE)
             batch.update(model(batch))
@@ -83,20 +86,20 @@ def run_train(cfg):
 
     train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
 
-    train_dataloader = TorchDataloader.create_from_config(
-        config["dataloader"]["train"], dataset=train_sampler, **dataset.meta
+    collator = BasicBatchProcessor()
+    train_dataloader = DataLoader(
+        dataset=train_sampler, **config["dataloader"]["train"], collate_fn=collator
     )
-
-    warm_dataloader = TorchDataloader.create_from_config(
-        config["dataloader"]["warm_val"], dataset=train_sampler, **dataset.meta
+    warm_dataloader = DataLoader(
+        dataset=train_sampler, **config["dataloader"]["warm_val"], collate_fn=collator
     )
-
-    validation_dataloader = TorchDataloader.create_from_config(
-        config["dataloader"]["validation"], dataset=validation_sampler, **dataset.meta
+    validation_dataloader = DataLoader(
+        dataset=validation_sampler,
+        **config["dataloader"]["validation"],
+        collate_fn=collator,
     )
-
-    eval_dataloader = TorchDataloader.create_from_config(
-        config["dataloader"]["validation"], dataset=test_sampler, **dataset.meta
+    eval_dataloader = DataLoader(
+        dataset=test_sampler, **config["dataloader"]["validation"], collate_fn=collator
     )
 
     model = MRGSRecModel.create_from_config(

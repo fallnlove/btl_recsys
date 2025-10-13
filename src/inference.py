@@ -4,7 +4,6 @@ import json
 import numpy as np
 import torch
 
-from .dataloader import TorchDataloader
 from .loss import MRGSRecLoss
 from .metrics import BaseMetric, StatefullMetric
 from .model import MRGSRecModel
