@@ -34,13 +34,17 @@ class MRGSRecModel(nn.Module):
         self._graph_encoder = GraphEncoder(graph, dropout, num_users, num_items)
 
         self._user_embeddings = nn.Embedding(
-            num_embeddings=self._num_users + 2, embedding_dim=self._embedding_dim
+            num_embeddings=self._num_users + 2,
+            embedding_dim=self._embedding_dim,
+            padding_idx=0,
         )
         self._newuser_embeddings = nn.Embedding(
             num_embeddings=1, embedding_dim=self._embedding_dim
         )
         self._item_embeddings = nn.Embedding(
-            num_embeddings=self._num_items + 2, embedding_dim=self._embedding_dim
+            num_embeddings=self._num_items + 2,
+            embedding_dim=self._embedding_dim,
+            padding_idx=0,
         )
         self._position_embeddings = nn.Embedding(
             num_embeddings=max_sequence_length
@@ -146,12 +150,30 @@ class MRGSRecModel(nn.Module):
         all_sample_events = inputs[f"item.ids"]  # (all_batch_events)
         all_sample_lengths = inputs[f"item.length"]  # (batch_size)
 
+        batch_size = all_sample_lengths.shape[0]
+        max_sequence_length = all_sample_lengths.max().item()
+
+        padded_sequence = torch.zeros(
+            batch_size,
+            max_sequence_length,
+            dtype=torch.long,
+            device=DEVICE,
+        )
+
+        mask = (
+            torch.arange(end=max_sequence_length, device=DEVICE).tile(batch_size, 1)
+            < all_sample_lengths[:, None]
+        )  # (batch_size, max_seq_len)
+        # print(f"{max_sequence_length=}")
+        # print(f"{mask.shape=}")
+        padded_sequence[mask] = all_sample_events
+
         sequence_embeddings = self._item_embeddings(
-            all_sample_events
+            padded_sequence
         )  # (all_batch_events, embedding_dim)
-        sequence_embeddings, mask = create_masked_tensor(
-            data=sequence_embeddings, lengths=all_sample_lengths
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+        # sequence_embeddings, mask = create_masked_tensor(
+        #     data=sequence_embeddings, lengths=all_sample_lengths
+        # )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         inputs["sequence_embeddings"] = sequence_embeddings
         inputs["mask"] = mask
@@ -199,9 +221,17 @@ class MRGSRecModel(nn.Module):
         sequence_embeddings = inputs["sequence_embeddings"]
 
         # START:Sequential part
-        sequence_embeddings = self._prepare_sequence_embeddings(
-            seq_len, mask, batch_size, all_sample_lengths, user_ids, sequence_embeddings
+        sequence_embeddings = self._prepare_sequence(
+            seq_len, mask, batch_size, all_sample_lengths, sequence_embeddings
         )
+
+        sequence_user_embeddings = self._user_embeddings(user_ids).unsqueeze(
+            1
+        )  # (batch_size, 1, embedding_dim)
+
+        sequence_embeddings = torch.cat(
+            [sequence_user_embeddings, sequence_embeddings], dim=1
+        )  # (batch_size, seq_len + 1, embedding_dim)
 
         sequence_embeddings = self._encode_sequence(
             seq_len, batch_size, mask, sequence_embeddings
@@ -237,13 +267,12 @@ class MRGSRecModel(nn.Module):
 
         return sequence_embeddings
 
-    def _prepare_sequence_embeddings(
+    def _prepare_sequence(
         self,
         seq_len,
         mask,
         batch_size,
         all_sample_lengths,
-        user_ids,
         sequence_embeddings,
     ):
         positions = (
@@ -262,7 +291,7 @@ class MRGSRecModel(nn.Module):
         position_embeddings, _ = create_masked_tensor(
             data=position_embeddings, lengths=all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim)
-        assert torch.allclose(position_embeddings[~mask], sequence_embeddings[~mask])
+        # assert torch.allclose(position_embeddings[~mask], sequence_embeddings[~mask])
 
         sequence_embeddings = (
             sequence_embeddings + position_embeddings
@@ -274,14 +303,6 @@ class MRGSRecModel(nn.Module):
             sequence_embeddings
         )  # (batch_size, seq_len, embedding_dim)
         sequence_embeddings[~mask] = 0
-
-        sequence_user_embeddings = self._user_embeddings(user_ids).unsqueeze(
-            1
-        )  # (batch_size, 1, embedding_dim)
-
-        sequence_embeddings = torch.cat(
-            [sequence_user_embeddings, sequence_embeddings], dim=1
-        )  # (batch_size, seq_len + 1, embedding_dim)
 
         return sequence_embeddings
 
