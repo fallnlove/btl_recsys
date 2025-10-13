@@ -1,10 +1,11 @@
+from itertools import chain
+
 import torch
 import torch.nn as nn
 
-from .utils import DEVICE, create_masked_tensor, get_activation_function
 from .graph import GraphEncoder
 from .sequence import SequentialEncoder
-from itertools import chain
+from .utils import DEVICE, create_masked_tensor, get_activation_function
 
 
 class MRGSRecModel(nn.Module):

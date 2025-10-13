@@ -1,11 +1,11 @@
-from omegaconf import OmegaConf
 import copy
 import json
 import time
 
-import torch
-from tqdm import tqdm, trange
 import hydra
+import torch
+from omegaconf import OmegaConf
+from tqdm import tqdm, trange
 
 from src.dataloader import TorchDataloader
 from src.dataset import ScientificDataset, build_graph
