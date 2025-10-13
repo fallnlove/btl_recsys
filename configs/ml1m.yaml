@@ -3,11 +3,12 @@ dataset:
   use_user_graph: false
   use_item_graph: false
   graph_dir_path: data2/MovieLens1M
+  path_to_data_dir: data2
+  name: MovieLens1M
+  max_sequence_length: 10
+  samplers: {}
   dataset:
     path_to_data_dir: data2
-    name: MovieLens1M
-    max_sequence_length: 10
-    samplers: {}
 dataloader:
   train:
     batch_size: 256

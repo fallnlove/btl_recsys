@@ -198,30 +198,67 @@ class ScientificDataset:
 
     def __init__(
         self,
-        train_sampler,
-        validation_sampler,
-        test_sampler,
-        num_users,
-        num_items,
         max_sequence_length,
+        path_to_data_dir,
+        dataset_name,
     ):
-        self._train_sampler = train_sampler
-        self._validation_sampler = validation_sampler
-        self._test_sampler = test_sampler
-        self._num_users = num_users
-        self._num_items = num_items
         self._max_sequence_length = max_sequence_length
+        self._path_to_data_dir = path_to_data_dir
+        self._dataset_name = dataset_name
 
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        data_dir_path = os.path.join(config["path_to_data_dir"], config["name"])
-        max_sequence_length = config["max_sequence_length"]
+        data = self._read_data()
+        (
+            train_dataset,
+            validation_dataset,
+            test_dataset,
+            self._num_users,
+            self._num_items,
+        ) = self._create_datasets(data)
+
+        self._log_dataset_stats(
+            train_dataset,
+            test_dataset,
+            self._num_users,
+            self._num_items,
+        )
+
+        self._train_sampler = SequenceSampler(
+            dataset=train_dataset,
+            num_users=self._num_users,
+            num_items=self._num_items,
+            mode="train",
+        )
+
+        self._validation_sampler, self._test_sampler = (
+            SequenceSampler(
+                dataset=sampler_dataset,
+                num_users=self._num_users,
+                num_items=self._num_items,
+                mode="eval",
+            )
+            for sampler_dataset in [validation_dataset, test_dataset]
+        )
+
+    def _log_dataset_stats(
+        self,
+        train_dataset,
+        test_dataset,
+        max_user_idx,
+        max_item_idx,
+    ):
+        logger.info(f"Train dataset size: {len(train_dataset)}")
+        logger.info(f"Test dataset size: {len(test_dataset)}")
+        logger.info(f"Max user idx: {max_user_idx}")
+        logger.info(f"Max item idx: {max_item_idx}")
+        logger.info(f"Max sequence length: {self.max_sequence_length}")
+        sparsity = (
+            (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
+        )
+        logger.info(f"{self._dataset_name} dataset sparsity: {sparsity}")
+
+    def _create_datasets(self, data):
         max_user_idx, max_item_idx = 0, 0
         train_dataset, validation_dataset, test_dataset = [], [], []
-
-        dataset_path = os.path.join(data_dir_path, "{}.txt".format("all_data"))
-        with open(dataset_path, "r") as f:
-            data = f.readlines()
 
         for sample in data:
             sample = sample.strip("\n").split(" ")
@@ -237,81 +274,51 @@ class ScientificDataset:
                 {
                     "user.ids": [user_idx],
                     "user.length": 1,
-                    "item.ids": item_ids[:-2][-max_sequence_length:],
-                    "item.length": len(item_ids[:-2][-max_sequence_length:]),
+                    "item.ids": item_ids[:-2][-self._max_sequence_length :],
+                    "item.length": len(item_ids[:-2][-self._max_sequence_length :]),
                 }
             )
-            assert len(item_ids[:-2][-max_sequence_length:]) == len(
-                set(item_ids[:-2][-max_sequence_length:])
+            assert len(item_ids[:-2][-self._max_sequence_length :]) == len(
+                set(item_ids[:-2][-self._max_sequence_length :])
             )
             validation_dataset.append(
                 {
                     "user.ids": [user_idx],
                     "user.length": 1,
-                    "item.ids": item_ids[:-1][-max_sequence_length:],
-                    "item.length": len(item_ids[:-1][-max_sequence_length:]),
+                    "item.ids": item_ids[:-1][-self._max_sequence_length :],
+                    "item.length": len(item_ids[:-1][-self._max_sequence_length :]),
                 }
             )
-            assert len(item_ids[:-1][-max_sequence_length:]) == len(
-                set(item_ids[:-1][-max_sequence_length:])
+            assert len(item_ids[:-1][-self._max_sequence_length :]) == len(
+                set(item_ids[:-1][-self._max_sequence_length :])
             )
             test_dataset.append(
                 {
                     "user.ids": [user_idx],
                     "user.length": 1,
-                    "item.ids": item_ids[-max_sequence_length:],
-                    "item.length": len(item_ids[-max_sequence_length:]),
+                    "item.ids": item_ids[-self._max_sequence_length :],
+                    "item.length": len(item_ids[-self._max_sequence_length :]),
                 }
             )
-            assert len(item_ids[-max_sequence_length:]) == len(
-                set(item_ids[-max_sequence_length:])
+            assert len(item_ids[-self._max_sequence_length :]) == len(
+                set(item_ids[-self._max_sequence_length :])
             )
 
-            # print(train_dataset[-1])
-            # print(validation_dataset[-1])
-            # print(test_dataset[-1])
-            # import sys
-            # sys.exit()
-
-        logger.info("Train dataset size: {}".format(len(train_dataset)))
-        logger.info("Test dataset size: {}".format(len(test_dataset)))
-        logger.info("Max user idx: {}".format(max_user_idx))
-        logger.info("Max item idx: {}".format(max_item_idx))
-        logger.info("Max sequence length: {}".format(max_sequence_length))
-        logger.info(
-            "{} dataset sparsity: {}".format(
-                config["name"],
-                (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx,
-            )
+        return (
+            train_dataset,
+            validation_dataset,
+            test_dataset,
+            max_user_idx,
+            max_item_idx,
         )
 
-        train_sampler = SequenceSampler.create_from_config(
-            config["samplers"],
-            dataset=train_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx,
-            mode="train",
-        )
+    def _read_data(self):
+        data_dir_path = os.path.join(self._path_to_data_dir, self._dataset_name)
+        dataset_path = os.path.join(data_dir_path, "all_data.txt")
+        with open(dataset_path, "r") as f:
+            data = f.readlines()
 
-        validation_sampler, test_sampler = (
-            SequenceSampler.create_from_config(
-                config["samplers"],
-                dataset=sampler_dataset,
-                num_users=max_user_idx,
-                num_items=max_item_idx,
-                mode="eval",
-            )
-            for sampler_dataset in [validation_dataset, test_dataset]
-        )
-
-        return cls(
-            train_sampler=train_sampler,
-            validation_sampler=validation_sampler,
-            test_sampler=test_sampler,
-            num_users=max_user_idx,
-            num_items=max_item_idx,
-            max_sequence_length=max_sequence_length,
-        )
+        return data
 
     def get_samplers(self):
         return self._train_sampler, self._validation_sampler, self._test_sampler

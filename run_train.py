@@ -20,6 +20,11 @@ logger = create_logger(name=__name__)
 seed_val = 42
 
 
+def move_batch(batch, device):
+    for key, value in batch.items():
+        batch[key] = value.to(device)
+
+
 def train(
     dataloader,
     warm_dataloader,
@@ -39,15 +44,10 @@ def train(
     for epoch_num in trange(num_epochs):
         logger.debug(f"Start epoch {epoch_num}")
         for step, batch in tqdm(enumerate(dataloader)):
-            batch_ = copy.deepcopy(batch)
-
             model.train()
-
-            for key, values in batch_.items():
-                batch_[key] = batch_[key].to(DEVICE)
-
-            batch_.update(model(batch_))
-            loss = loss_function(batch_)
+            move_batch(batch, DEVICE)
+            batch.update(model(batch))
+            loss = loss_function(batch)
             optimizer.step(loss)
         current_metric = inference(**inference_dict)
         if current_metric > best_metric:
@@ -60,61 +60,6 @@ def train(
     train_end = time.time()
     print("Total time:", train_end - train_start)
     return best_metric
-
-    # print("start folding_in")
-    # print(torch.linalg.norm(model._user_embeddings.weight))
-    # print(torch.linalg.norm(model._newuser_embeddings.weight))
-
-    # torch.save(model, "ml_model.pt")
-    # #model = torch.load("ml_model.pt")
-    # num_user = model._num_users
-    # model._user_embeddings.requires_grad_(False)
-    # model._item_embeddings.requires_grad_(False)
-    # mas = []
-    # inds = []
-    # with open('./data2/MovieLens1M/val_users.txt', 'r') as f:
-    #     users = [int(line.strip()) for line in f]
-    # for i in tqdm(users[:100]):
-    #     it = 0
-    #     model._newuser_embeddings.weight = torch.nn.Parameter(model._user_embeddings.weight[i].unsqueeze(0))
-    #     for epoch in range(8):
-    #         for step, batch in enumerate(dataloader):
-    #             it += 1
-    #             batch_ = copy.deepcopy(batch)
-
-    #             model.train()
-
-    #             for key, values in batch_.items():
-    #                 batch_[key] = batch_[key].to(DEVICE)
-
-    #             batch_.update(model(batch_, ind = i))
-    #             loss = loss_function(batch_) + 100 * torch.linalg.norm(model._user_embeddings.weight[i] - model._newuser_embeddings.weight) ** 2
-
-    #             optimizer_fi.step(loss)
-    #             step_num += 1
-
-    #             if best_metric is None:
-    #                 # Take the last model
-    #                 best_checkpoint = copy.deepcopy(model.state_dict())
-    #                 best_epoch = epoch_num
-    #             elif best_checkpoint is None or best_metric in batch_ and current_metric <= batch_[best_metric]:
-    #                 # If it is the first checkpoint, or it is the best checkpoint
-    #                 current_metric = batch_[best_metric]
-    #                 best_checkpoint = copy.deepcopy(model.state_dict())
-    #                 best_epoch = epoch_num
-
-    #             if it >= max_batch:
-    #                 break
-    #         mas += [model._newuser_embeddings.weight.clone()]
-    #         inds += [i]
-
-    # for i in range(len(mas)):
-    #     model._user_embeddings.weight[inds[i]] += (model._newuser_embeddings.weight[0] - model._user_embeddings.weight[inds[i]])
-
-    # print(torch.linalg.norm(model._user_embeddings.weight))
-    # print(torch.linalg.norm(model._newuser_embeddings.weight))
-    # logger.debug('Training procedure has been finished!')
-    # return best_checkpoint
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="ml1m")
@@ -129,7 +74,11 @@ def run_train(cfg):
     logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
     logger.info("Current DEVICE: {}".format(DEVICE))
 
-    dataset = ScientificDataset.create_from_config(config["dataset"])
+    dataset = ScientificDataset(
+        config["dataset"]["max_sequence_length"],
+        config["dataset"]["path_to_data_dir"],
+        config["dataset"]["name"],
+    )
     graph = build_graph(dataset, config["dataset"]["dataset"]["path_to_data_dir"])
 
     train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
