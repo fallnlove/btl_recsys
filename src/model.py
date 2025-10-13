@@ -3,6 +3,8 @@ import torch.nn as nn
 
 from .utils import DEVICE, create_masked_tensor, get_activation_function
 from .graph import GraphEncoder
+from .sequence import SequentialEncoder
+from itertools import chain
 
 
 class MRGSRecModel(nn.Module):
@@ -52,19 +54,16 @@ class MRGSRecModel(nn.Module):
             embedding_dim=embedding_dim,
         )
 
-        self._layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
-        self._dropout = nn.Dropout(dropout)
-
-        transformer_encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embedding_dim,
-            nhead=num_heads,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout,
-            activation=self._activation,
-            layer_norm_eps=layer_norm_eps,
-            batch_first=True,
+        self._sequential_encoder = SequentialEncoder(
+            embedding_dim,
+            num_heads,
+            dim_feedforward,
+            dropout,
+            self._activation,
+            layer_norm_eps,
+            num_layers,
+            self._position_embeddings,
         )
-        self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
 
         self._fusion_part = nn.Sequential(
             nn.Linear(2 * embedding_dim, dim_feedforward),
@@ -147,37 +146,6 @@ class MRGSRecModel(nn.Module):
         return padded_embeddings, padded_ego_embeddings, mask
 
     def forward(self, inputs, ind=None):
-        all_sample_events = inputs[f"item.ids"]  # (all_batch_events)
-        all_sample_lengths = inputs[f"item.length"]  # (batch_size)
-
-        batch_size = all_sample_lengths.shape[0]
-        max_sequence_length = all_sample_lengths.max().item()
-
-        padded_sequence = torch.zeros(
-            batch_size,
-            max_sequence_length,
-            dtype=torch.long,
-            device=DEVICE,
-        )
-
-        mask = (
-            torch.arange(end=max_sequence_length, device=DEVICE).tile(batch_size, 1)
-            < all_sample_lengths[:, None]
-        )  # (batch_size, max_seq_len)
-        # print(f"{max_sequence_length=}")
-        # print(f"{mask.shape=}")
-        padded_sequence[mask] = all_sample_events
-
-        sequence_embeddings = self._item_embeddings(
-            padded_sequence
-        )  # (all_batch_events, embedding_dim)
-        # sequence_embeddings, mask = create_masked_tensor(
-        #     data=sequence_embeddings, lengths=all_sample_lengths
-        # )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-
-        inputs["sequence_embeddings"] = sequence_embeddings
-        inputs["mask"] = mask
-
         sequence_user_embeddings, sequence_embeddings = self._sequential_part(inputs)
 
         # All embeddings after graph part
@@ -195,12 +163,6 @@ class MRGSRecModel(nn.Module):
             sequence_user_embeddings, batch_graph_enriched_user_embeddings
         )
 
-        # print(f"{fusion_user_embeddings.shape=}")
-        # print(f"{graph_enriched_item_embeddings.shape=}")
-        # print(f"{graph_user_embeddings.shape=}")
-        # print(f"{sequence_user_embeddings.shape=}")
-        # print(f"{sequence_embeddings.shape=}")
-
         if self.training:  # training mode
             return self._compute_training_outputs(
                 inputs,
@@ -213,15 +175,24 @@ class MRGSRecModel(nn.Module):
             return self._compute_inference_outputs(fusion_user_embeddings)
 
     def _sequential_part(self, inputs):
-        mask = inputs["mask"]
+        all_sample_lengths = inputs[f"item.length"]
+        all_sample_events = inputs[f"item.ids"]  # (all_batch_events)
+        user_ids = inputs[f"user.ids"]
+
+        padded_sequence, mask = self._sequential_encoder._pad_sequence(
+            all_sample_events, all_sample_lengths
+        )
+
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
-        all_sample_lengths = inputs[f"item.length"]
-        user_ids = inputs[f"user.ids"]
-        sequence_embeddings = inputs["sequence_embeddings"]
 
-        # START:Sequential part
-        sequence_embeddings = self._prepare_sequence(
+        inputs["mask"] = mask
+
+        sequence_embeddings = self._item_embeddings(
+            padded_sequence
+        )  # (all_batch_events, embedding_dim)
+
+        sequence_embeddings = self._sequential_encoder._prepare_sequence(
             seq_len, mask, batch_size, all_sample_lengths, sequence_embeddings
         )
 
@@ -233,7 +204,7 @@ class MRGSRecModel(nn.Module):
             [sequence_user_embeddings, sequence_embeddings], dim=1
         )  # (batch_size, seq_len + 1, embedding_dim)
 
-        sequence_embeddings = self._encode_sequence(
+        sequence_embeddings = self._sequential_encoder._encode_sequence(
             seq_len, batch_size, mask, sequence_embeddings
         )
 
@@ -241,70 +212,11 @@ class MRGSRecModel(nn.Module):
             sequence_embeddings[:, 0, :],
             sequence_embeddings[:, 1:, :],
         )  # (batch_size, embedding_dim), (batch_size, seq_len, embedding_dim)
-        # END:Sequential part
 
         return (
             sequence_user_embeddings,
             sequence_embeddings,
         )
-
-    def _encode_sequence(self, seq_len, batch_size, mask, sequence_embeddings):
-        causal_mask = (
-            torch.tril(torch.ones(seq_len, seq_len)).bool().to(DEVICE)
-        )  # (seq_len, seq_len)
-        advanced_mask = torch.ones(
-            seq_len + 1, seq_len + 1, dtype=torch.bool, device=DEVICE
-        )  # (seq_len + 1, seq_len + 1)
-        advanced_mask[1:, 1:] = causal_mask
-        advanced_src_key_padding_mask = torch.cat(
-            [torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE), mask], dim=1
-        )  # (batch_size, seq_len + 1)
-        sequence_embeddings = self._encoder(
-            src=sequence_embeddings,
-            mask=~advanced_mask,
-            src_key_padding_mask=~advanced_src_key_padding_mask,
-        )  # (batch_size, seq_len + 1, embedding_dim)
-
-        return sequence_embeddings
-
-    def _prepare_sequence(
-        self,
-        seq_len,
-        mask,
-        batch_size,
-        all_sample_lengths,
-        sequence_embeddings,
-    ):
-        positions = (
-            torch.arange(start=seq_len - 1, end=-1, step=-1, device=mask.device)[None]
-            .tile([batch_size, 1])
-            .long()
-        )  # (batch_size, seq_len)
-        positions_mask = (
-            positions < all_sample_lengths[:, None]
-        )  # (batch_size, max_seq_len)
-
-        positions = positions[positions_mask]  # (all_batch_events)
-        position_embeddings = self._position_embeddings(
-            positions
-        )  # (all_batch_events, embedding_dim)
-        position_embeddings, _ = create_masked_tensor(
-            data=position_embeddings, lengths=all_sample_lengths
-        )  # (batch_size, seq_len, embedding_dim)
-        # assert torch.allclose(position_embeddings[~mask], sequence_embeddings[~mask])
-
-        sequence_embeddings = (
-            sequence_embeddings + position_embeddings
-        )  # (batch_size, seq_len, embedding_dim)
-        sequence_embeddings = self._layernorm(
-            sequence_embeddings
-        )  # (batch_size, seq_len, embedding_dim)
-        sequence_embeddings = self._dropout(
-            sequence_embeddings
-        )  # (batch_size, seq_len, embedding_dim)
-        sequence_embeddings[~mask] = 0
-
-        return sequence_embeddings
 
     def _fuse_embeddings(self, sequence_user_embeddings, graph_user_embeddings):
         return self._fusion_part(
