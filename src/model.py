@@ -193,7 +193,7 @@ class MRGSRecModel(nn.Module):
 
         sequence_embeddings = self._item_embeddings(
             padded_sequence
-        )  # (all_batch_events, embedding_dim)
+        )  # (batch_size, seq_len, embedding_dim)
 
         sequence_embeddings = self._sequential_encoder._prepare_sequence(
             seq_len, mask, batch_size, all_sample_lengths, sequence_embeddings

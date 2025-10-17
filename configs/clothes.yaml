@@ -3,6 +3,10 @@ dataset:
   use_user_graph: false
   use_item_graph: false
   graph_dir_path: data2/Clothes
+  path_to_data_dir: data2
+  name: Clothes
+  max_sequence_length: 10
+  samplers: {}
   dataset:
     path_to_data_dir: data2
     name: Clothes

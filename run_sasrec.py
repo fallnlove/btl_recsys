@@ -119,6 +119,7 @@ def run_train(cfg):
         + 1,  # in order to include `max_sequence_length` value
         embedding_dim=_embedding_dim,
     )
+    del config["model"]["initializer_range"]
     model = SequentialEncoder(
         **config["model"],
         position_embeddings=position_embeddings,
@@ -152,8 +153,8 @@ def run_train(cfg):
         optimizer=optimizer,
         optimizer_fi=optimizer_fi,
         loss_function=loss_function,
-        num_epochs=config.get("num_epochs", 100),
-        early_stopping_rounds=config.get("early_stopping_rounds", 10),
+        num_epochs=config.get("num_epochs", 200),
+        early_stopping_rounds=config.get("early_stopping_rounds", 50),
         best_metric=config.get("best_metric"),
         inference_dict=inference_dict,
     )
