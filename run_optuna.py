@@ -8,7 +8,8 @@ import optuna
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
-from run_train import run_train
+from run_sasrec import run_train as run_sasrec
+from run_train import run_train as run_mrgsrec
 
 
 def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
@@ -64,7 +65,14 @@ def update_index(
 @click.option("--config_path", "-cp", type=str)
 @click.option("--num_trials", "-nt", type=int)
 @click.option("--exp_name", "-en", type=str)
-def main(config_path, num_trials, exp_name):
+@click.option("--model", "-m", type=str)
+def main(config_path, num_trials, exp_name, model):
+    if model == "sasrec":
+        run_train = run_sasrec
+    elif model == "mrgsrec":
+        run_train = run_mrgsrec
+    else:
+        assert False, "wrong model"
     base_cfg = OmegaConf.load(config_path)
     base_cfg = OmegaConf.create(OmegaConf.to_container(base_cfg, resolve=True))
 
