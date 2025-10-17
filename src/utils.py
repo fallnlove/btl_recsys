@@ -1,3 +1,4 @@
+from time import time
 import argparse
 import inspect
 import json
@@ -6,6 +7,25 @@ import random
 
 import numpy as np
 import torch
+
+
+def create_logger(
+    name,
+    level=logging.DEBUG,
+    format="[%(asctime)s] [%(levelname)s]: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+):
+    logging.basicConfig(level=level, format=format, datefmt=datefmt)
+    logger = logging.getLogger(name)
+    return logger
+
+
+logger = create_logger(name=__name__)
+
+
+def move_batch(batch, device):
+    for key, value in batch.items():
+        batch[key] = value.to(device)
 
 
 class BasicBatchProcessor:
@@ -41,17 +61,6 @@ def parse_args():
         params = json.load(f)
 
     return params
-
-
-def create_logger(
-    name,
-    level=logging.DEBUG,
-    format="[%(asctime)s] [%(levelname)s]: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-):
-    logging.basicConfig(level=level, format=format, datefmt=datefmt)
-    logger = logging.getLogger(name)
-    return logger
 
 
 def fix_random_seed(seed):
@@ -179,3 +188,43 @@ class MetaParent(type):
             cls.create_from_config = (
                 parent_create_from_config if is_base_class else child_create_from_config
             )
+
+
+def train(
+    dataloader,
+    warm_dataloader,
+    model,
+    optimizer,
+    optimizer_fi,
+    loss_function,
+    num_epochs,
+    early_stopping_rounds,
+    device,
+    best_metric=None,
+    inference_dict=None,
+):
+    logger.debug("Start training...")
+    train_start = time.time()
+    best_metric = 0.0
+    best_epoch = 0
+    for epoch_num in range(num_epochs):
+        logger.debug(f"Start epoch {epoch_num}")
+        for step, batch in tqdm(
+            enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch_num}"
+        ):
+            model.train()
+            move_batch(batch, device)
+            batch.update(model(batch))
+            loss = loss_function(batch)
+            optimizer.step(loss)
+        current_metric = inference(**inference_dict)
+        if current_metric > best_metric:
+            best_metric = current_metric
+            best_epoch = epoch_num
+        elif epoch_num - best_epoch > early_stopping_rounds:
+            print(f"no more improve in {early_stopping_rounds} epoch")
+            break
+
+    train_end = time.time()
+    print("Total time:", train_end - train_start)
+    return best_metric

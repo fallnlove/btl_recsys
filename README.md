@@ -10,13 +10,13 @@ To train a model with a specific configuration, use the following command.
 The configuration file should be placed inside the `configs/` folder.
 
 ```bash
-python3 run_train.py -cn <your_config>
+python3 run_mrgsrec.py -cn <your_config>
 ```
 
 You can also override some variables directly from the command line:
 
 ```bash
-python3 run_train.py -cn <your_config> var1=32 var2=32
+python3 run_mrgsrec.py -cn <your_config> var1=32 var2=32
 ```
 
 ## Models
@@ -24,7 +24,7 @@ python3 run_train.py -cn <your_config> var1=32 var2=32
 Two types of models are available: **SASRec** and **MRGSRec**.
 
 * To train SASRec, use `run_sasrec.py`.
-* To train MRGSRec, use `run_train.py`.
+* To train MRGSRec, use `run_mrgsrec.py`.
 
 ## Hyperparameter Optimization
 

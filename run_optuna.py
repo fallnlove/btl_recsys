@@ -9,7 +9,7 @@ import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
 from run_sasrec import run_train as run_sasrec
-from run_train import run_train as run_mrgsrec
+from run_mrgsrec import run_train as run_mrgsrec
 
 
 def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:

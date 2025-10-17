@@ -15,58 +15,13 @@ from src.loss import MRGSRecLoss
 from src.metrics import BaseMetric, StatefullMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
-from src.utils import create_logger, fix_random_seed, parse_args
+from src.utils import create_logger, fix_random_seed, train
 from src.sequence import SequentialEncoder
 from src.loss import LocalObjective
 from torch import nn
 
 logger = create_logger(name=__name__)
 seed_val = 42
-
-
-def move_batch(batch, device):
-    for key, value in batch.items():
-        batch[key] = value.to(device)
-
-
-def train(
-    dataloader,
-    warm_dataloader,
-    model,
-    optimizer,
-    optimizer_fi,
-    loss_function,
-    num_epochs,
-    early_stopping_rounds,
-    device,
-    best_metric=None,
-    inference_dict=None,
-):
-    logger.debug("Start training...")
-    train_start = time.time()
-    best_metric = 0.0
-    best_epoch = 0
-    for epoch_num in range(num_epochs):
-        logger.debug(f"Start epoch {epoch_num}")
-        for step, batch in tqdm(
-            enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch_num}"
-        ):
-            model.train()
-            move_batch(batch, device)
-            batch.update(model(batch))
-            loss = loss_function(batch)
-            optimizer.step(loss)
-        current_metric = inference(**inference_dict)
-        if current_metric > best_metric:
-            best_metric = current_metric
-            best_epoch = epoch_num
-        elif epoch_num - best_epoch > early_stopping_rounds:
-            print(f"no more improve in {early_stopping_rounds} epoch")
-            break
-
-    train_end = time.time()
-    print("Total time:", train_end - train_start)
-    return best_metric
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="ml1m")
@@ -165,14 +120,6 @@ def run_train(cfg):
     )
     print(f"ndcg@10 = {best_metric}")
     return best_metric
-    _ = inference(**inference_dict)
-
-    logger.debug("Saving model...")
-    checkpoint_path = "./checkpoints/{}_final_state.pth".format(
-        config["experiment_name"]
-    )
-    torch.save(model.state_dict(), checkpoint_path)
-    logger.debug("Saved model as {}".format(checkpoint_path))
 
 
 if __name__ == "__main__":
