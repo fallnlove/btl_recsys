@@ -8,10 +8,10 @@ from .loss import MRGSRecLoss
 from .metrics import BaseMetric, StatefullMetric
 from .model import MRGSRecModel
 from .optimizer import BasicOptimizer
-from .utils import DEVICE, create_logger, fix_random_seed, parse_args
+from .utils import create_logger, fix_random_seed, parse_args
 
 
-def inference(dataloader, model, metrics):
+def inference(dataloader, model, metrics, device):
     running_metrics = {}
     for metric_name, metric_function in metrics.items():
         running_metrics[metric_name] = []
@@ -22,7 +22,7 @@ def inference(dataloader, model, metrics):
         for idx, batch in enumerate(dataloader):
 
             for key, value in batch.items():
-                batch[key] = value.to(DEVICE)
+                batch[key] = value.to(device)
             batch["logits"] = model(batch)
 
             for key, values in batch.items():

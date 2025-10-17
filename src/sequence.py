@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from .utils import DEVICE, create_masked_tensor
+from .utils import create_masked_tensor
 
 
 class SequentialEncoder(nn.Module):
@@ -34,6 +34,12 @@ class SequentialEncoder(nn.Module):
         self._item_embeddings = item_embeddings
         self._layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
         self._dropout = nn.Dropout(dropout)
+        dummy = torch.empty(0)
+        self.register_buffer("_device_anchor", dummy, persistent=False)
+
+    @property
+    def device(self):
+        return self._device_anchor.device
 
     def _pad_sequence(self, all_sample_events, all_sample_lengths):
         batch_size = all_sample_lengths.shape[0]
@@ -43,11 +49,13 @@ class SequentialEncoder(nn.Module):
             batch_size,
             max_sequence_length,
             dtype=torch.long,
-            device=DEVICE,
+            device=self.device,
         )
 
         mask = (
-            torch.arange(end=max_sequence_length, device=DEVICE).tile(batch_size, 1)
+            torch.arange(end=max_sequence_length, device=self.device).tile(
+                batch_size, 1
+            )
             < all_sample_lengths[:, None]
         )  # (batch_size, max_seq_len)
         padded_sequence[mask] = all_sample_events
@@ -80,7 +88,7 @@ class SequentialEncoder(nn.Module):
             positions
         )  # (all_batch_events, embedding_dim)
         position_embeddings, _ = create_masked_tensor(
-            data=position_embeddings, lengths=all_sample_lengths
+            data=position_embeddings, lengths=all_sample_lengths, device=self.device
         )  # (batch_size, seq_len, embedding_dim)
         # assert torch.allclose(position_embeddings[~mask], sequence_embeddings[~mask])
 
@@ -100,21 +108,21 @@ class SequentialEncoder(nn.Module):
     def _encode_sequence(
         self, seq_len, batch_size, mask, sequence_embeddings, account_user_embedding
     ):
-        causal_mask = (
-            torch.tril(torch.ones(seq_len, seq_len)).bool().to(DEVICE)
-        )  # (seq_len, seq_len)
+        causal_mask = torch.tril(
+            torch.ones(seq_len, seq_len, device=self.device)
+        ).bool()  # (seq_len, seq_len)
         if account_user_embedding:
             advanced_mask = torch.ones(
-                seq_len + 1, seq_len + 1, dtype=torch.bool, device=DEVICE
+                seq_len + 1, seq_len + 1, dtype=torch.bool, device=self.device
             )  # (seq_len + 1, seq_len + 1)
             advanced_mask[1:, 1:] = causal_mask
             advanced_src_key_padding_mask = torch.cat(
-                [torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE), mask],
+                [torch.ones(batch_size, 1, dtype=torch.bool, device=self.device), mask],
                 dim=1,
             )  # (batch_size, seq_len + 1)
         else:
             advanced_mask = torch.ones(
-                seq_len, seq_len, dtype=torch.bool, device=DEVICE
+                seq_len, seq_len, dtype=torch.bool, device=self.device
             )  # (seq_len, seq_len)
             advanced_mask = causal_mask
             advanced_src_key_padding_mask = mask

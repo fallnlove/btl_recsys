@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from .graph import GraphEncoder
 from .sequence import SequentialEncoder
-from .utils import DEVICE, create_masked_tensor, get_activation_function
+from .utils import create_masked_tensor, get_activation_function
 
 
 class MRGSRecModel(nn.Module):
@@ -75,6 +75,12 @@ class MRGSRecModel(nn.Module):
         )
 
         self._init_weights(initializer_range)
+        dummy = torch.empty(0)
+        self.register_buffer("_device_anchor", dummy, persistent=False)
+
+    @property
+    def device(self):
+        return self._device_anchor.device
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -137,11 +143,11 @@ class MRGSRecModel(nn.Module):
         ego_embeddings = ego_embeddings(ids)  # (all_batch_events, embedding_dim)
 
         padded_embeddings, mask = create_masked_tensor(
-            final_embeddings, lengths
+            final_embeddings, lengths, device=self.device
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         padded_ego_embeddings, ego_mask = create_masked_tensor(
-            ego_embeddings, lengths
+            ego_embeddings, lengths, device=self.device
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         assert torch.all(mask == ego_mask)
@@ -301,13 +307,13 @@ class MRGSRecModel(nn.Module):
         self, max_sequence_length, batch_size, all_positive_sample_lengths
     ):
         bpr_mask = (
-            torch.arange(end=max_sequence_length, device=DEVICE)[None].tile(
+            torch.arange(end=max_sequence_length, device=self.device)[None].tile(
                 [batch_size, 1]
             )
             < all_positive_sample_lengths[:, None]
         )  # (batch_size, max_seq_len)
         bpr_positive_user_ids = (
-            torch.arange(end=batch_size, device=DEVICE)[None]
+            torch.arange(end=batch_size, device=self.device)[None]
             .tile([max_sequence_length, 1])
             .T
         )  # (batch_size, max_seq_len)

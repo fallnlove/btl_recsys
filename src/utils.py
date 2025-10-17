@@ -7,9 +7,6 @@ import random
 import numpy as np
 import torch
 
-DEVICE = torch.device("cuda:6") if torch.cuda.is_available() else torch.device("cpu")
-# DEVICE = torch.device('cpu')
-
 
 class BasicBatchProcessor:
     def __call__(self, batch):
@@ -64,7 +61,7 @@ def fix_random_seed(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def create_masked_tensor(data, lengths):
+def create_masked_tensor(data, lengths, device):
     batch_size = lengths.shape[0]
     max_sequence_length = lengths.max().item()
 
@@ -73,11 +70,11 @@ def create_masked_tensor(data, lengths):
         max_sequence_length,
         data.shape[-1],
         dtype=torch.float,
-        device=DEVICE,
+        device=device,
     )  # (batch_size, max_seq_len, emb_dim)
 
     mask = (
-        torch.arange(end=max_sequence_length, device=DEVICE)[None].tile([batch_size, 1])
+        torch.arange(end=max_sequence_length, device=device)[None].tile([batch_size, 1])
         < lengths[:, None]
     )  # (batch_size, max_seq_len)
 

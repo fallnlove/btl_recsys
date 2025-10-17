@@ -15,7 +15,7 @@ from src.loss import MRGSRecLoss
 from src.metrics import BaseMetric, StatefullMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
-from src.utils import DEVICE, create_logger, fix_random_seed, parse_args
+from src.utils import create_logger, fix_random_seed, parse_args
 from src.sequence import SequentialEncoder
 from src.loss import LocalObjective
 from torch import nn
@@ -38,6 +38,7 @@ def train(
     loss_function,
     num_epochs,
     early_stopping_rounds,
+    device,
     best_metric=None,
     inference_dict=None,
 ):
@@ -51,7 +52,7 @@ def train(
             enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch_num}"
         ):
             model.train()
-            move_batch(batch, DEVICE)
+            move_batch(batch, device)
             batch.update(model(batch))
             loss = loss_function(batch)
             optimizer.step(loss)
@@ -77,8 +78,10 @@ def run_train(cfg):
     fix_random_seed(seed_val)
     config = OmegaConf.to_container(cfg, resolve=True)
 
+    device = config["device"]
+
     logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
-    logger.info("Current DEVICE: {}".format(DEVICE))
+    logger.info("Current DEVICE: {}".format(device))
 
     dataset = ScientificDataset(
         config["dataset"]["max_sequence_length"],
@@ -125,7 +128,7 @@ def run_train(cfg):
         position_embeddings=position_embeddings,
         item_embeddings=item_embeddings,
         num_items=_num_items,
-    ).to(DEVICE)
+    ).to(device)
     loss_function = LocalObjective("positive")
     optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
     optimizer_fi = BasicOptimizer.create_from_config(
@@ -143,6 +146,7 @@ def run_train(cfg):
         dataloader=validation_dataloader,
         model=model,
         metrics=metrics,
+        device=device,
     )
 
     # Train process
@@ -155,6 +159,7 @@ def run_train(cfg):
         loss_function=loss_function,
         num_epochs=config.get("num_epochs", 200),
         early_stopping_rounds=config.get("early_stopping_rounds", 50),
+        device=device,
         best_metric=config.get("best_metric"),
         inference_dict=inference_dict,
     )

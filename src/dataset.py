@@ -9,8 +9,6 @@ import torch
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
-from .utils import DEVICE
-
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +67,7 @@ class SequenceSampler:
             }
 
 
-def build_graph(dataset, graph_dir_path):
+def build_graph(dataset, graph_dir_path, device):
     train_sampler, _, _ = dataset.get_samplers()
 
     (
@@ -115,6 +113,7 @@ def build_graph(dataset, graph_dir_path):
         train_item_interactions,
         dataset.num_users,
         dataset.num_items,
+        device,
     )
 
     return _graph
@@ -126,6 +125,7 @@ def _build_general_graph(
     train_item_interactions,
     _num_users,
     _num_items,
+    device,
 ):
     path_to_graph = os.path.join(graph_dir_path, "general_graph.npz")
     if os.path.exists(path_to_graph):
@@ -148,7 +148,7 @@ def _build_general_graph(
             biparite=True,
         )
         # sp.save_npz(path_to_graph, self._graph)
-        return _convert_sp_mat_to_sp_tensor(_graph).coalesce().to(DEVICE)
+        return _convert_sp_mat_to_sp_tensor(_graph).coalesce().to(device)
 
 
 def get_sparse_graph_layer(sparse_matrix, fst_dim, snd_dim, biparite=False):
