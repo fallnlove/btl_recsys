@@ -308,7 +308,6 @@ class ScientificDataset:
         print(f"{len(validation_dataset)=}")
         print(f"{len(test_dataset)=}")
 
-
         return (
             train_dataset,
             validation_dataset,

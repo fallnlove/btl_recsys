@@ -5,20 +5,18 @@ import time
 import hydra
 import torch
 from omegaconf import OmegaConf
-from tqdm import tqdm, trange
-from src.utils import BasicBatchProcessor
+from torch import nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm, trange
 
 from src.dataset import ScientificDataset, build_graph
-from src.inference import inference
-from src.loss import MRGSRecLoss
+from src.loss import LocalObjective, MRGSRecLoss
 from src.metrics import BaseMetric, StatefullMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
-from src.utils import create_logger, fix_random_seed, train
 from src.sequence import SequentialEncoder
-from src.loss import LocalObjective
-from torch import nn
+from src.utils import (BasicBatchProcessor, create_logger, fix_random_seed,
+                       inference, train)
 
 logger = create_logger(name=__name__)
 seed_val = 42
