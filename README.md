@@ -4,6 +4,12 @@
 
 Datasets were taken from [the Amazon Product Data repository](https://cseweb.ucsd.edu/~jmcauley/datasets/amazon/links.html).
 
+for splitting you can use:
+```bash
+cd scripts
+python global_split.py --data_path=<path_to_csv> --user_col=<user_col_name> --item_col=<item_col_name> --timestamp_col=<timestamp_col_name> --train_quantile=0.95 --validation_type='last'
+```
+
 ## Training
 
 To train a model with a specific configuration, use the following command.
