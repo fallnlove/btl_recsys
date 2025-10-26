@@ -29,7 +29,8 @@ def run_train(cfg):
     fix_random_seed(seed_val)
     config = OmegaConf.to_container(cfg, resolve=True)
 
-    device = config["device"]
+    # device = config["device"]
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
     logger.info("Current DEVICE: {}".format(device))
