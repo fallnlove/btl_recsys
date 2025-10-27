@@ -207,8 +207,8 @@ marimo/_lsp/
 __marimo__/
 
 # my
-data2/*
-!data2/.gitkeep
+data/*
+!data/.gitkeep
 raw_data/*
 outputs/*
 !outputs/.gitkeep

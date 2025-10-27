@@ -2,14 +2,14 @@ import copy
 import logging
 import os
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import scipy.sparse as sp
 import torch
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
-from pathlib import Path
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 

@@ -30,7 +30,7 @@ def run_train(cfg):
     config = OmegaConf.to_container(cfg, resolve=True)
 
     # device = config["device"]
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
     logger.info("Current DEVICE: {}".format(device))
