@@ -25,7 +25,7 @@ def getDF(path):
 @click.command()
 @click.argument("filename")
 def main(filename):
-    filename = Path("..") / filename
+    filename = Path(filename)
     ds_name = filename.name.split(".")[0]
     print(f"{ds_name=}")
     df = getDF(filename)
@@ -48,7 +48,7 @@ def main(filename):
     print(f"First few rows:\n{new_df.head()}")
 
     print("saving csv...")
-    folder = Path("../data")
+    folder = Path("data")
     folder.mkdir(exist_ok=True)
     dataset_path = folder / f"{ds_name}.csv"
     print(f"{dataset_path=}")
