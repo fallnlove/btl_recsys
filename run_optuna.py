@@ -15,9 +15,6 @@ from run_sasrec import run_train as run_sasrec
 def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
     cfg = deepcopy(base_cfg)
 
-    cfg.dataset.dataset.max_sequence_length = trial.suggest_int(
-        "max_sequence_length", 10, 50
-    )
     cfg.model.embedding_dim = trial.suggest_categorical(
         "embedding_dim", [8, 16, 32, 64, 128]
     )

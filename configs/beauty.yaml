@@ -1,8 +1,8 @@
-experiment_name: mrgsrec_beauty4
+experiment_name: beauty_exp
 dataset:
   path_to_data_dir: data
   name: reviews_Beauty_5
-  max_sequence_length: 50
+  max_sequence_length: 10
   samplers: {}
 dataloader:
   train:
