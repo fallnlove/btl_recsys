@@ -8,6 +8,8 @@ import scipy.sparse as sp
 import torch
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
+from pathlib import Path
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -206,14 +208,14 @@ class ScientificDataset:
         self._path_to_data_dir = path_to_data_dir
         self._dataset_name = dataset_name
 
-        data = self._read_data()
+        user_items = self._read_data()
         (
             train_dataset,
             validation_dataset,
             test_dataset,
             self._num_users,
             self._num_items,
-        ) = self._create_datasets(data)
+        ) = self._create_datasets(user_items)
 
         self._log_dataset_stats(
             train_dataset,
@@ -256,15 +258,11 @@ class ScientificDataset:
         )
         logger.info(f"{self._dataset_name} dataset sparsity: {sparsity}")
 
-    def _create_datasets(self, data):
+    def _create_datasets(self, user_items):
         max_user_idx, max_item_idx = 0, 0
         train_dataset, validation_dataset, test_dataset = [], [], []
 
-        for sample in data:
-            sample = sample.strip("\n").split(" ")
-            user_idx = int(sample[0])
-            item_ids = [int(item_id) for item_id in sample[1:]]
-
+        for user_idx, item_ids in sorted(list(user_items.items()), key=lambda x: x[0]):
             max_user_idx = max(max_user_idx, user_idx)
             max_item_idx = max(max_item_idx, max(item_ids))
 
@@ -317,12 +315,11 @@ class ScientificDataset:
         )
 
     def _read_data(self):
-        data_dir_path = os.path.join(self._path_to_data_dir, self._dataset_name)
-        dataset_path = os.path.join(data_dir_path, "all_data.txt")
-        with open(dataset_path, "r") as f:
-            data = f.readlines()
+        csv_path = Path(self._path_to_data_dir) / f"{self._dataset_name}.csv"
+        dataset = pd.read_csv(csv_path)
+        user_items = dataset.groupby("user_id")["item_id"].apply(list).to_dict()
 
-        return data
+        return user_items
 
     def get_samplers(self):
         return self._train_sampler, self._validation_sampler, self._test_sampler
