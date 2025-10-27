@@ -1,17 +1,8 @@
 experiment_name: mrgsrec_sports
 dataset:
-  use_user_graph: false
-  use_item_graph: false
-  graph_dir_path: data2/Sports
-  path_to_data_dir: data2
-  name: Sports
+  path_to_data_dir: data
+  name: reviews_Sports_and_Outdoors_5
   max_sequence_length: 10
-  samplers: {}
-  dataset:
-    path_to_data_dir: data2
-    name: Sports
-    max_sequence_length: 10
-    samplers: {}
 dataloader:
   train:
     batch_size: 256
@@ -60,4 +51,5 @@ metrics:
   ndcg@10:
     type: ndcg
     k: 10
+device: "cuda:0"
 

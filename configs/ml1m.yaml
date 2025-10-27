@@ -1,14 +1,8 @@
 experiment_name: mrgsrec_ml1m
 dataset:
-  use_user_graph: false
-  use_item_graph: false
-  graph_dir_path: data2/MovieLens1M
-  path_to_data_dir: data2
+  path_to_data_dir: data
   name: MovieLens1M
   max_sequence_length: 10
-  samplers: {}
-  dataset:
-    path_to_data_dir: data2
 dataloader:
   train:
     batch_size: 256
@@ -56,4 +50,5 @@ metrics:
   ndcg@10:
     type: ndcg
     k: 10
+device: "cuda:0"
 

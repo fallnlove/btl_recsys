@@ -1,17 +1,8 @@
 experiment_name: mrgsrec_clothes
 dataset:
-  use_user_graph: false
-  use_item_graph: false
-  graph_dir_path: data2/Clothes
-  path_to_data_dir: data2
-  name: Clothes
+  path_to_data_dir: data
+  name: reviews_Clothing_Shoes_and_Jewelry_5
   max_sequence_length: 10
-  samplers: {}
-  dataset:
-    path_to_data_dir: data2
-    name: Clothes
-    max_sequence_length: 10
-    samplers: {}
 dataloader:
   train:
     batch_size: 256
@@ -59,4 +50,4 @@ metrics:
   ndcg@10:
     type: ndcg
     k: 10
-
+device: "cuda:0"
