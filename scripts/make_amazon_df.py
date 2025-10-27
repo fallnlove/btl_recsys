@@ -54,15 +54,6 @@ def main(filename):
     print(f"{dataset_path=}")
     df_sorted.to_csv(dataset_path, index=False)
     print("CSV saved successfully!")
-    print()
-    print("saving txt...")
-    user_items = df_sorted.groupby("user_id")["item_id"].apply(list).to_dict()
-    dataset_folder = Path(f"../data/{ds_name}")
-    dataset_folder.mkdir()
-    with open(dataset_folder / "all_data.txt", "w") as f:
-        for user_id, items in user_items.items():
-            f.write(f"{user_id} {' '.join(map(str, items))}\n")
-    print("TXT saved successfully!")
 
 
 if __name__ == "__main__":
