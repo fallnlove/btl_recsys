@@ -4,3 +4,5 @@ torch==2.8.0
 tqdm
 ipykernel
 pandas
+click
+hydra-core
