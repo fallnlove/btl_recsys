@@ -69,7 +69,7 @@ class SequenceSampler:
             }
 
 
-def build_graph(dataset, graph_dir_path, device):
+def build_graph(dataset, graph_dir_path, device, dataset_meta):
     train_sampler, _, _ = dataset.get_samplers()
 
     (
@@ -113,8 +113,8 @@ def build_graph(dataset, graph_dir_path, device):
         graph_dir_path,
         train_user_interactions,
         train_item_interactions,
-        dataset.num_users,
-        dataset.num_items,
+        dataset_meta["num_users"],
+        dataset_meta["num_items"],
         device,
     )
 
@@ -252,7 +252,7 @@ class ScientificDataset:
         logger.info(f"Test dataset size: {len(test_dataset)}")
         logger.info(f"Max user idx: {max_user_idx}")
         logger.info(f"Max item idx: {max_item_idx}")
-        logger.info(f"Max sequence length: {self.max_sequence_length}")
+        logger.info(f"Max sequence length: {self._max_sequence_length}")
         sparsity = (
             (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
         )
@@ -323,23 +323,3 @@ class ScientificDataset:
 
     def get_samplers(self):
         return self._train_sampler, self._validation_sampler, self._test_sampler
-
-    @property
-    def num_users(self):
-        return self._num_users
-
-    @property
-    def num_items(self):
-        return self._num_items
-
-    @property
-    def max_sequence_length(self):
-        return self._max_sequence_length
-
-    @property
-    def meta(self):
-        return {
-            "num_users": self.num_users,
-            "num_items": self.num_items,
-            "max_sequence_length": self.max_sequence_length,
-        }
