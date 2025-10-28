@@ -15,25 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class SequenceDataset:
-    def __init__(self, dataset, num_users, num_items, mode):
+    def __init__(self, dataset, mode):
         assert mode in ["train", "eval"]
         self._mode = mode
         self._dataset = dataset
-        self._num_users = num_users
-        self._num_items = num_items
 
     @property
     def dataset(self):
         return self._dataset
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            dataset=kwargs["dataset"],
-            num_users=kwargs["num_users"],
-            num_items=kwargs["num_items"],
-            mode=kwargs["mode"],
-        )
 
     def __len__(self):
         return len(self._dataset)

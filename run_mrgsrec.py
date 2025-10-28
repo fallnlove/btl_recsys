@@ -71,22 +71,16 @@ def run_train(cfg):
 
     train_sampler = SequenceDataset(
         train_index,
-        num_users=dataset_meta["num_users"],
-        num_items=dataset_meta["num_items"],
         mode="train",
     )
 
     validation_sampler = SequenceDataset(
         validation_index,
-        num_users=dataset_meta["num_users"],
-        num_items=dataset_meta["num_items"],
         mode="eval",
     )
 
     test_sampler = SequenceDataset(
         test_index,
-        num_users=dataset_meta["num_users"],
-        num_items=dataset_meta["num_items"],
         mode="eval",
     )
 
