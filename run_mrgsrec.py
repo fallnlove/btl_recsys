@@ -10,7 +10,7 @@ from tqdm import tqdm, trange
 from pathlib import Path
 import pandas as pd
 
-from src.dataset import ScientificDataset, build_graph
+from src.dataset import ScientificDataset, build_graph, SequenceDataset
 from src.loss import MRGSRecLoss
 from src.metrics import BaseMetric, StatefullMetric
 from src.model import MRGSRecModel
@@ -54,6 +54,7 @@ def run_train(cfg):
 
     # TODO: dumb a little
     all_data, train_path, val_path, test_path = unpack_dataset(config["dataset"])
+
     dataset_meta = {
         "num_users": all_data["user_id"].max(),
         "num_items": all_data["item_id"].max(),
@@ -65,11 +66,33 @@ def run_train(cfg):
         config["dataset"]["path_to_data_dir"],
         config["dataset"]["name"],
     )
-    graph = build_graph(
-        dataset, config["dataset"]["path_to_data_dir"], device, dataset_meta
+
+    train_index, validation_index, test_index = dataset.get_index()
+
+    train_sampler = SequenceDataset(
+        train_index,
+        num_users=dataset_meta["num_users"],
+        num_items=dataset_meta["num_items"],
+        mode="train",
     )
 
-    train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
+    validation_sampler = SequenceDataset(
+        validation_index,
+        num_users=dataset_meta["num_users"],
+        num_items=dataset_meta["num_items"],
+        mode="eval",
+    )
+
+    test_sampler = SequenceDataset(
+        test_index,
+        num_users=dataset_meta["num_users"],
+        num_items=dataset_meta["num_items"],
+        mode="eval",
+    )
+
+    graph = build_graph(
+        train_sampler, config["dataset"]["path_to_data_dir"], device, dataset_meta
+    )
 
     collator = BasicBatchProcessor()
     train_dataloader = DataLoader(

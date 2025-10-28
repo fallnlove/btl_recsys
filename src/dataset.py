@@ -14,7 +14,7 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
-class SequenceSampler:
+class SequenceDataset:
     def __init__(self, dataset, num_users, num_items, mode):
         assert mode in ["train", "eval"]
         self._mode = mode
@@ -69,8 +69,8 @@ class SequenceSampler:
             }
 
 
-def build_graph(dataset, graph_dir_path, device, dataset_meta):
-    train_sampler, _, _ = dataset.get_samplers()
+def build_graph(train_dataset, graph_dir_path, device, dataset_meta):
+    train_sampler = train_dataset
 
     (
         train_interactions,
@@ -197,7 +197,6 @@ def _convert_sp_mat_to_sp_tensor(X):
 
 
 class ScientificDataset:
-
     def __init__(
         self,
         max_sequence_length,
@@ -210,36 +209,22 @@ class ScientificDataset:
 
         user_items = self._read_data()
         (
-            train_dataset,
-            validation_dataset,
-            test_dataset,
+            self.train_index,
+            self.validation_index,
+            self.test_index,
             self._num_users,
             self._num_items,
         ) = self._create_datasets(user_items)
 
         self._log_dataset_stats(
-            train_dataset,
-            test_dataset,
+            self.train_index,
+            self.test_index,
             self._num_users,
             self._num_items,
         )
 
-        self._train_sampler = SequenceSampler(
-            dataset=train_dataset,
-            num_users=self._num_users,
-            num_items=self._num_items,
-            mode="train",
-        )
-
-        self._validation_sampler, self._test_sampler = (
-            SequenceSampler(
-                dataset=sampler_dataset,
-                num_users=self._num_users,
-                num_items=self._num_items,
-                mode="eval",
-            )
-            for sampler_dataset in [validation_dataset, test_dataset]
-        )
+    def get_index(self):
+        return self.train_index, self.validation_index, self.test_index
 
     def _log_dataset_stats(
         self,
@@ -320,6 +305,3 @@ class ScientificDataset:
         user_items = dataset.groupby("user_id")["item_id"].apply(list).to_dict()
 
         return user_items
-
-    def get_samplers(self):
-        return self._train_sampler, self._validation_sampler, self._test_sampler
