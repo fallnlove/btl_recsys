@@ -4,15 +4,13 @@ import torch.nn as nn
 
 class LocalObjective:
 
-    def __init__(self, labels_prefix):
-        self._labels_prefix = labels_prefix
-
+    def __init__(self):
         # TODO: add scalable softmax
         self._loss = nn.CrossEntropyLoss()
 
     def __call__(self, inputs):
         all_logits = inputs["local_prediction"]  # (all_items, num_classes)
-        all_labels = inputs["{}.ids".format(self._labels_prefix)]  # (all_items)
+        all_labels = inputs["labels.ids"]  # (all_items)
         assert all_logits.shape[0] == all_labels.shape[0]
 
         loss = self._loss(all_logits, all_labels)  # (1)
@@ -155,9 +153,7 @@ class MRGSRecLoss:
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            local_objective=LocalObjective(
-                labels_prefix=config["local"]["labels_prefix"],
-            ),
+            local_objective=LocalObjective(),
             global_objective=GlobalObjective(
                 positive_prefix=config["global"]["positive_prefix"],
                 negative_prefix=config["global"]["negative_prefix"],

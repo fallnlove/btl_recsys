@@ -264,8 +264,8 @@ class MRGSRecModel(nn.Module):
         batch_size = mask.shape[0]
         max_sequence_length = mask.shape[1]
 
-        all_positive_sample_events = inputs[f"positive.ids"]  # (all_batch_events)
-        all_positive_sample_lengths = inputs[f"positive.length"]  # (batch_size)
+        all_positive_sample_events = inputs[f"labels.ids"]  # (all_batch_events)
+        all_positive_sample_lengths = inputs[f"labels.length"]  # (batch_size)
 
         bpr_positive_user_ids = self._get_bpr_positive_user_ids(
             max_sequence_length, batch_size, all_positive_sample_lengths

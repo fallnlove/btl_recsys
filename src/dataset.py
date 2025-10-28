@@ -39,8 +39,8 @@ class SequenceDataset:
                 "user.length": sample["user.length"],
                 "item.ids": item_sequence,
                 "item.length": len(item_sequence),
-                "positive.ids": next_item_sequence,
-                "positive.length": len(next_item_sequence),
+                "labels.ids": next_item_sequence,
+                "labels.length": len(next_item_sequence),
             }
         else:
             sample = copy.deepcopy(self._dataset[index])
