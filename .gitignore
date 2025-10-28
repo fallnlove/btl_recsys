@@ -210,6 +210,7 @@ __marimo__/
 data/*
 !data/.gitkeep
 raw_data/*
+!raw_data/.gitkeep
 outputs/*
 !outputs/.gitkeep
 optuna_outputs/*
