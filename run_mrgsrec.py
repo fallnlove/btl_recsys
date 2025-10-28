@@ -22,6 +22,7 @@ from src.utils import (
     inference,
     train,
 )
+from src.metrics import NDCGMetric
 
 logger = create_logger(name=__name__)
 seed_val = 42
@@ -115,10 +116,7 @@ def run_train(cfg):
 
     logger.debug("Everything is ready for training process!")
 
-    metrics = {
-        metric_name: BaseMetric.create_from_config(metric_cfg, **dataset_meta)
-        for metric_name, metric_cfg in config["metrics"].items()
-    }
+    metrics = {"ndcg@10": NDCGMetric(10)}
 
     inference_dict = dict(
         dataloader=validation_dataloader,

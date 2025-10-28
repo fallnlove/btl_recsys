@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .metrics import MetaParent, StatefullMetric
+from .metrics import StatefullMetric
 
 
 def create_logger(
