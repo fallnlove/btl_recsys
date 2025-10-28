@@ -28,7 +28,7 @@ class SequenceDataset:
         return len(self._dataset)
 
     def __getitem__(self, index):
-        sample = copy.deepcopy(self._dataset[index])
+        sample = self._dataset[index]
         item_sequence = sample["item.ids"][:-1]
         if self._mode == "train":
             next_item_sequence = sample["item.ids"][1:]
