@@ -1,6 +1,7 @@
 import argparse
 import os
 
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -9,11 +10,11 @@ def split_by_time(data, user_col, timestamp_col, quantile):
     data = data.sort_values([user_col, timestamp_col], kind="stable")
 
     time_threshold = data[timestamp_col].quantile(quantile)
-    user_second_timestamp = data.groupby(user_col)[timestamp_col].nth(1)
+    user_second_timestamp = data.groupby(user_col).nth(1).set_index("user_id")[timestamp_col]
     train_users = user_second_timestamp[user_second_timestamp <= time_threshold].index
     train = data[data[user_col].isin(train_users)]
     train = train[train[timestamp_col] <= time_threshold]
-    user_last_timestamp = data.groupby(user_col)[timestamp_col].nth(-1)
+    user_last_timestamp = data.groupby(user_col).nth(-1).set_index("user_id")[timestamp_col]
     test_users = user_last_timestamp[user_last_timestamp > time_threshold].index
     test = data[data[user_col].isin(test_users)]
     return train, test, time_threshold
@@ -66,7 +67,7 @@ def main(
     validation_size=None,
     random_state=42,
 ):
-
+    data_path = Path(data_path)
     print(f"Loading data from: {data_path}")
     data = pd.read_csv(data_path)
 
@@ -97,7 +98,7 @@ def main(
             f"Unknown validation_type: {validation_type}. Use 'by_user', 'by_time', or 'last'."
         )
 
-    output_dir = "../data2/preprocessed"
+    output_dir = f"data/global_split/{data_path.stem}"
     os.makedirs(output_dir, exist_ok=True)
 
     train_path = os.path.join(output_dir, "train.csv")
