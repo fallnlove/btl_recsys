@@ -28,34 +28,20 @@ class SequenceDataset:
         return len(self._dataset)
 
     def __getitem__(self, index):
+        sample = copy.deepcopy(self._dataset[index])
+        item_sequence = sample["item.ids"][:-1]
         if self._mode == "train":
-            sample = copy.deepcopy(self._dataset[index])
-
-            item_sequence = sample["item.ids"][:-1]
             next_item_sequence = sample["item.ids"][1:]
-
-            return {
-                "user.ids": sample["user.ids"],
-                "user.length": sample["user.length"],
-                "item.ids": item_sequence,
-                "item.length": len(item_sequence),
-                "labels.ids": next_item_sequence,
-                "labels.length": len(next_item_sequence),
-            }
         else:
-            sample = copy.deepcopy(self._dataset[index])
-
-            item_sequence = sample["item.ids"][:-1]
-            next_item = sample["item.ids"][-1]
-
-            return {
-                "user.ids": sample["user.ids"],
-                "user.length": sample["user.length"],
-                "item.ids": item_sequence,
-                "item.length": len(item_sequence),
-                "labels.ids": [next_item],
-                "labels.length": 1,
-            }
+            next_item_sequence = [sample["item.ids"][-1]]
+        return {
+            "user.ids": sample["user.ids"],
+            "user.length": sample["user.length"],
+            "item.ids": item_sequence,
+            "item.length": len(item_sequence),
+            "labels.ids": next_item_sequence,
+            "labels.length": len(next_item_sequence),
+        }
 
 
 def build_graph(train_dataset, graph_dir_path, device, dataset_meta):
