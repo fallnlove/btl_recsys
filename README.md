@@ -1,4 +1,4 @@
-# multirepr_recsys
+# Multi-Representation Recommender Systems
 
 ## Datasets
 
