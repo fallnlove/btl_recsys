@@ -7,14 +7,17 @@ import pandas as pd
 
 
 def split_by_time(data, user_col, timestamp_col, quantile):
-    data = data.sort_values([user_col, timestamp_col], kind="stable")
-
+    # TODO: sort each data
     time_threshold = data[timestamp_col].quantile(quantile)
-    user_second_timestamp = data.groupby(user_col).nth(1).set_index("user_id")[timestamp_col]
+    user_second_timestamp = (
+        data.groupby(user_col).nth(1).set_index("user_id")[timestamp_col]
+    )
     train_users = user_second_timestamp[user_second_timestamp <= time_threshold].index
     train = data[data[user_col].isin(train_users)]
     train = train[train[timestamp_col] <= time_threshold]
-    user_last_timestamp = data.groupby(user_col).nth(-1).set_index("user_id")[timestamp_col]
+    user_last_timestamp = (
+        data.groupby(user_col).nth(-1).set_index("user_id")[timestamp_col]
+    )
     test_users = user_last_timestamp[user_last_timestamp > time_threshold].index
     test = data[data[user_col].isin(test_users)]
     return train, test, time_threshold

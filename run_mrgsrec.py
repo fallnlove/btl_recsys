@@ -10,7 +10,7 @@ from tqdm import tqdm, trange
 from pathlib import Path
 import pandas as pd
 
-from src.dataset import ScientificDataset, build_graph, SequenceDataset
+from src.dataset import build_graph, SequenceDataset
 from src.loss import MRGSRecLoss
 from src.metrics import BaseMetric, StatefullMetric
 from src.model import MRGSRecModel
@@ -30,8 +30,9 @@ seed_val = 42
 
 def unpack_dataset(dataset_config):
     data_folder = Path(dataset_config["path_to_data_dir"])
-    all_data = pd.read_csv(data_folder / f"{dataset_config['name']}.csv")
-    split_folder = data_folder / "global_split"
+    dataset_name = dataset_config["name"]
+    all_data = pd.read_csv(data_folder / f"{dataset_name}.csv")
+    split_folder = data_folder / "global_split" / dataset_name
     train_path = split_folder / "train.csv"
     val_path = split_folder / "validation.csv"
     test_path = split_folder / "test.csv"
@@ -62,27 +63,23 @@ def run_train(cfg):
         "max_sequence_length": config["dataset"]["max_sequence_length"],
     }
 
-    dataset = ScientificDataset(
-        config["dataset"]["max_sequence_length"],
-        config["dataset"]["path_to_data_dir"],
-        config["dataset"]["name"],
-    )
-
-    train_index, validation_index, test_index = dataset.get_index()
-
     train_sampler = SequenceDataset(
-        train_index,
+        train_path,
+        config["dataset"]["max_sequence_length"],
         mode="train",
     )
 
     validation_sampler = SequenceDataset(
-        validation_index,
-        mode="eval",
+        val_path,
+        config["dataset"]["max_sequence_length"],
+        mode="val",
+        all_data=all_data,
     )
 
     test_sampler = SequenceDataset(
-        test_index,
-        mode="eval",
+        test_path,
+        config["dataset"]["max_sequence_length"],
+        mode="test",
     )
 
     graph = build_graph(
@@ -93,15 +90,12 @@ def run_train(cfg):
     train_dataloader = DataLoader(
         dataset=train_sampler, **config["dataloader"]["train"], collate_fn=collator
     )
-    warm_dataloader = DataLoader(
-        dataset=train_sampler, **config["dataloader"]["warm_val"], collate_fn=collator
-    )
     validation_dataloader = DataLoader(
         dataset=validation_sampler,
         **config["dataloader"]["validation"],
         collate_fn=collator,
     )
-    eval_dataloader = DataLoader(
+    test_dataloader = DataLoader(
         dataset=test_sampler, **config["dataloader"]["validation"], collate_fn=collator
     )
 
@@ -118,8 +112,15 @@ def run_train(cfg):
 
     metrics = {"ndcg@10": NDCGMetric(10)}
 
-    inference_dict = dict(
+    inference_dict_validation = dict(
         dataloader=validation_dataloader,
+        model=model,
+        metrics=metrics,
+        device=device,
+    )
+
+    inference_dict_test = dict(
+        dataloader=test_dataloader,
         model=model,
         metrics=metrics,
         device=device,
@@ -136,7 +137,8 @@ def run_train(cfg):
         num_epochs=config.get("num_epochs", 100),
         early_stopping_rounds=config.get("early_stopping_rounds", 10),
         best_metric=config.get("best_metric"),
-        inference_dict=inference_dict,
+        inference_dict_validation=inference_dict_validation,
+        inference_dict_test=inference_dict_test,
         device=device,
     )
     print(f"ndcg@10 = {best_metric}")

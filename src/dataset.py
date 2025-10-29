@@ -15,20 +15,64 @@ logger = logging.getLogger(__name__)
 
 
 class SequenceDataset:
-    def __init__(self, dataset, mode):
-        assert mode in ["train", "eval"]
+    def __init__(self, data_path, max_sequence_length, mode, all_data=None):
+        assert mode in ["train", "val", "test"], "Wrong mode"
+        if mode == "val" and all_data is None:
+            assert False, "Need all data for val"
         self._mode = mode
-        self._dataset = dataset
+        self._index = []
+        self._fill_index(data_path, max_sequence_length, mode, all_data)
 
-    @property
-    def dataset(self):
-        return self._dataset
+    def _fill_index(self, data_path, max_sequence_length, mode, all_data):
+        df = pd.read_csv(data_path)
+        if mode != "val":
+            user_items = df.groupby("user_id")["item_id"].apply(list).to_dict()
+            max_sequence_length = 10
+            for user_idx, item_ids in sorted(
+                list(user_items.items()), key=lambda x: x[0]
+            ):
+                item_sequnce = item_ids[-max_sequence_length:]
+                self._index.append(
+                    {
+                        "user.ids": [user_idx],
+                        "user.length": 1,
+                        "item.ids": item_sequnce,
+                        "item.length": len(item_sequnce),
+                    }
+                )
+        else:
+            for _, (val_user_id, val_item_id, val_rating, val_timestamp) in tqdm(
+                df.iterrows(), total=len(df), desc="Validation ds creation"
+            ):
+                user_info = all_data[all_data.user_id == val_user_id]
+                previous_user_info = user_info[
+                    user_info.timestamp <= val_timestamp
+                ].copy()
+                # to make out item last
+                previous_user_info.loc[
+                    previous_user_info.user_id == val_user_id, "timestamp"
+                ] += 1
+                previous_user_info = previous_user_info.reset_index().sort_values(
+                    by=["timestamp", "index"]
+                )
+                previous_user_items = previous_user_info.item_id.tolist()
+                assert previous_user_items[-1] == val_item_id
+                # print(previous_user_items)
+                item_sequence = previous_user_items[-max_sequence_length:]
+                self._index.append(
+                    {
+                        "user.ids": [val_user_id],
+                        "user.length": 1,
+                        "item.ids": item_sequence,
+                        "item.length": len(item_sequence),
+                    }
+                )
 
     def __len__(self):
-        return len(self._dataset)
+        return len(self._index)
 
     def __getitem__(self, index):
-        sample = self._dataset[index]
+        sample = self._index[index]
         item_sequence = sample["item.ids"][:-1]
         if self._mode == "train":
             next_item_sequence = sample["item.ids"][1:]
@@ -64,7 +108,7 @@ def build_graph(train_dataset, graph_dir_path, device, dataset_meta):
     def _process_sampler(
         sampler,
     ):
-        for sample in sampler.dataset:
+        for sample in sampler._index:
             user_id = sample["user.ids"][0]
             item_ids = sample["item.ids"]
 
@@ -169,114 +213,3 @@ def _convert_sp_mat_to_sp_tensor(X):
     index = torch.stack([row, col])
     data = torch.FloatTensor(coo.data)
     return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
-
-
-class ScientificDataset:
-    def __init__(
-        self,
-        max_sequence_length,
-        path_to_data_dir,
-        dataset_name,
-    ):
-        self._max_sequence_length = max_sequence_length
-        self._path_to_data_dir = path_to_data_dir
-        self._dataset_name = dataset_name
-
-        user_items = self._read_data()
-        (
-            self.train_index,
-            self.validation_index,
-            self.test_index,
-            self._num_users,
-            self._num_items,
-        ) = self._create_datasets(user_items)
-
-        self._log_dataset_stats(
-            self.train_index,
-            self.test_index,
-            self._num_users,
-            self._num_items,
-        )
-
-    def get_index(self):
-        return self.train_index, self.validation_index, self.test_index
-
-    def _log_dataset_stats(
-        self,
-        train_dataset,
-        test_dataset,
-        max_user_idx,
-        max_item_idx,
-    ):
-        logger.info(f"Train dataset size: {len(train_dataset)}")
-        logger.info(f"Test dataset size: {len(test_dataset)}")
-        logger.info(f"Max user idx: {max_user_idx}")
-        logger.info(f"Max item idx: {max_item_idx}")
-        logger.info(f"Max sequence length: {self._max_sequence_length}")
-        sparsity = (
-            (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
-        )
-        logger.info(f"{self._dataset_name} dataset sparsity: {sparsity}")
-
-    def _create_datasets(self, user_items):
-        max_user_idx, max_item_idx = 0, 0
-        train_dataset, validation_dataset, test_dataset = [], [], []
-
-        for user_idx, item_ids in sorted(list(user_items.items()), key=lambda x: x[0]):
-            max_user_idx = max(max_user_idx, user_idx)
-            max_item_idx = max(max_item_idx, max(item_ids))
-
-            assert len(item_ids) >= 5
-
-            train_dataset.append(
-                {
-                    "user.ids": [user_idx],
-                    "user.length": 1,
-                    "item.ids": item_ids[:-2][-self._max_sequence_length :],
-                    "item.length": len(item_ids[:-2][-self._max_sequence_length :]),
-                }
-            )
-            assert len(item_ids[:-2][-self._max_sequence_length :]) == len(
-                set(item_ids[:-2][-self._max_sequence_length :])
-            )
-            validation_dataset.append(
-                {
-                    "user.ids": [user_idx],
-                    "user.length": 1,
-                    "item.ids": item_ids[:-1][-self._max_sequence_length :],
-                    "item.length": len(item_ids[:-1][-self._max_sequence_length :]),
-                }
-            )
-            assert len(item_ids[:-1][-self._max_sequence_length :]) == len(
-                set(item_ids[:-1][-self._max_sequence_length :])
-            )
-            test_dataset.append(
-                {
-                    "user.ids": [user_idx],
-                    "user.length": 1,
-                    "item.ids": item_ids[-self._max_sequence_length :],
-                    "item.length": len(item_ids[-self._max_sequence_length :]),
-                }
-            )
-            assert len(item_ids[-self._max_sequence_length :]) == len(
-                set(item_ids[-self._max_sequence_length :])
-            )
-
-        print(f"{len(train_dataset)=}")
-        print(f"{len(validation_dataset)=}")
-        print(f"{len(test_dataset)=}")
-
-        return (
-            train_dataset,
-            validation_dataset,
-            test_dataset,
-            max_user_idx,
-            max_item_idx,
-        )
-
-    def _read_data(self):
-        csv_path = Path(self._path_to_data_dir) / f"{self._dataset_name}.csv"
-        dataset = pd.read_csv(csv_path)
-        user_items = dataset.groupby("user_id")["item_id"].apply(list).to_dict()
-
-        return user_items

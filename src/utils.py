@@ -170,7 +170,8 @@ def train(
     early_stopping_rounds,
     device,
     best_metric=None,
-    inference_dict=None,
+    inference_dict_validation=None,
+    inference_dict_test=None,
 ):
     logger.debug("Start training...")
     train_start = time.time()
@@ -186,7 +187,10 @@ def train(
             batch.update(model(batch))
             loss = loss_function(batch)
             optimizer.step(loss)
-        current_metric = inference(**inference_dict)
+        print("VAL")
+        current_metric = inference(**inference_dict_validation)
+        print("TEST")
+        inference(**inference_dict_test)
         if current_metric > best_metric:
             best_metric = current_metric
             best_epoch = epoch_num

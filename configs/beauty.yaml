@@ -19,9 +19,9 @@ dataloader:
     shuffle: false
 model:
   embedding_dim: 64
-  num_heads: 2
+  num_heads: 1
   num_layers: 2
-  dim_feedforward: 256
+  dim_feedforward: 64
   dropout: 0.3
   activation: gelu
   layer_norm_eps: 1.0e-09

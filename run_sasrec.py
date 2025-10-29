@@ -5,21 +5,40 @@ import time
 import hydra
 import torch
 from omegaconf import OmegaConf
+import pandas as pd
+from pathlib import Path
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
-from src.dataset import ScientificDataset, build_graph
+from src.dataset import SequenceDataset, build_graph
 from src.loss import LocalObjective, MRGSRecLoss
-from src.metrics import BaseMetric, StatefullMetric
+from src.metrics import NDCGMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
 from src.sequence import SequentialEncoder
-from src.utils import (BasicBatchProcessor, create_logger, fix_random_seed,
-                       inference, train)
+from src.utils import (
+    BasicBatchProcessor,
+    create_logger,
+    fix_random_seed,
+    inference,
+    train,
+)
 
 logger = create_logger(name=__name__)
 seed_val = 42
+
+
+def unpack_dataset(dataset_config):
+    data_folder = Path(dataset_config["path_to_data_dir"])
+    dataset_name = dataset_config["name"]
+    all_data = pd.read_csv(data_folder / f"{dataset_name}.csv")
+    split_folder = data_folder / "global_split" / dataset_name
+    train_path = split_folder / "train.csv"
+    val_path = split_folder / "validation.csv"
+    test_path = split_folder / "test.csv"
+
+    return all_data, train_path, val_path, test_path
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="ml1m")
@@ -36,34 +55,51 @@ def run_train(cfg):
     logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
     logger.info("Current DEVICE: {}".format(device))
 
-    dataset = ScientificDataset(
+    # TODO: dumb a little
+    all_data, train_path, val_path, test_path = unpack_dataset(config["dataset"])
+
+    dataset_meta = {
+        "num_users": all_data["user_id"].max(),
+        "num_items": all_data["item_id"].max(),
+        "max_sequence_length": config["dataset"]["max_sequence_length"],
+    }
+
+    train_sampler = SequenceDataset(
+        train_path,
         config["dataset"]["max_sequence_length"],
-        config["dataset"]["path_to_data_dir"],
-        config["dataset"]["name"],
+        mode="train",
     )
 
-    train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
+    validation_sampler = SequenceDataset(
+        val_path,
+        config["dataset"]["max_sequence_length"],
+        mode="val",
+        all_data=all_data,
+    )
+
+    test_sampler = SequenceDataset(
+        test_path,
+        config["dataset"]["max_sequence_length"],
+        mode="test",
+    )
 
     collator = BasicBatchProcessor()
     train_dataloader = DataLoader(
         dataset=train_sampler, **config["dataloader"]["train"], collate_fn=collator
-    )
-    warm_dataloader = DataLoader(
-        dataset=train_sampler, **config["dataloader"]["warm_val"], collate_fn=collator
     )
     validation_dataloader = DataLoader(
         dataset=validation_sampler,
         **config["dataloader"]["validation"],
         collate_fn=collator,
     )
-    eval_dataloader = DataLoader(
+    test_dataloader = DataLoader(
         dataset=test_sampler, **config["dataloader"]["validation"], collate_fn=collator
     )
 
     _embedding_dim = config["model"]["embedding_dim"]
-    _num_users = dataset.meta["num_users"]
-    _num_items = dataset.meta["num_items"]
-    _max_sequence_length = dataset.meta["max_sequence_length"]
+    _num_users = dataset_meta["num_users"]
+    _num_items = dataset_meta["num_items"]
+    _max_sequence_length = dataset_meta["max_sequence_length"]
 
     item_embeddings = nn.Embedding(
         num_embeddings=_num_items + 2,
@@ -82,7 +118,7 @@ def run_train(cfg):
         item_embeddings=item_embeddings,
         num_items=_num_items,
     ).to(device)
-    loss_function = LocalObjective("positive")
+    loss_function = LocalObjective()
     optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
     optimizer_fi = BasicOptimizer.create_from_config(
         config["optimizer_fi"], model=model
@@ -90,13 +126,17 @@ def run_train(cfg):
 
     logger.debug("Everything is ready for training process!")
 
-    metrics = {
-        metric_name: BaseMetric.create_from_config(metric_cfg, **dataset.meta)
-        for metric_name, metric_cfg in config["metrics"].items()
-    }
+    metrics = {"ndcg@10": NDCGMetric(10)}
 
-    inference_dict = dict(
+    inference_dict_validation = dict(
         dataloader=validation_dataloader,
+        model=model,
+        metrics=metrics,
+        device=device,
+    )
+
+    inference_dict_test = dict(
+        dataloader=test_dataloader,
         model=model,
         metrics=metrics,
         device=device,
@@ -114,7 +154,8 @@ def run_train(cfg):
         early_stopping_rounds=config.get("early_stopping_rounds", 50),
         device=device,
         best_metric=config.get("best_metric"),
-        inference_dict=inference_dict,
+        inference_dict_validation=inference_dict_validation,
+        inference_dict_test=inference_dict_test,
     )
     print(f"ndcg@10 = {best_metric}")
     return best_metric
