@@ -7,7 +7,12 @@ import pandas as pd
 
 
 def split_by_time(data, user_col, timestamp_col, quantile):
-    # TODO: sort each data
+    # Filter interactions
+    df = (data.groupby(by="user_id").count()["item_id"] >= 3)
+    good_users = df[df].index
+    data = data[data[user_col].isin(good_users)]
+    data = data.reset_index(drop=True)
+
     time_threshold = data[timestamp_col].quantile(quantile)
     user_second_timestamp = (
         data.groupby(user_col).nth(1).set_index("user_id")[timestamp_col]
@@ -20,6 +25,8 @@ def split_by_time(data, user_col, timestamp_col, quantile):
     )
     test_users = user_last_timestamp[user_last_timestamp > time_threshold].index
     test = data[data[user_col].isin(test_users)]
+    test = test[test[user_col].isin(train_users)]
+
     return train, test, time_threshold
 
 
@@ -39,22 +46,13 @@ def split_validation_by_user(train, user_col, validation_size, random_state):
 
 
 def split_validation_last_train(train, user_col, timestamp_col):
-    train = train.sort_values([user_col, timestamp_col], kind="stable")
-    train["time_idx_reversed"] = train.groupby(user_col).cumcount(ascending=False)
+    train_len = len(train)
+    assert train["timestamp"].is_monotonic_increasing, "Train is not monotonic"
+    validation = train.groupby(by="user_id").last().reset_index()
+    # Drop validation
+    train = train[~train.apply(tuple, 1).isin(validation.apply(tuple, 1))]
 
-    validation = train[
-        (train["time_idx_reversed"] == 0)
-        & (
-            train.groupby(user_col)["time_idx_reversed"].transform("max") >= 1
-        )  # last interaction for users with 2+ interactions
-    ].drop(columns=["time_idx_reversed"])
-
-    train = train[
-        (train["time_idx_reversed"] >= 1)
-        & (
-            train.groupby(user_col)["time_idx_reversed"].transform("max") >= 1
-        )  # all but last interaction for users with 2+ interactions
-    ].drop(columns=["time_idx_reversed"])
+    assert train_len == len(train) + len(validation)
 
     return train, validation
 
@@ -107,6 +105,10 @@ def main(
     train_path = os.path.join(output_dir, "train.csv")
     validation_path = os.path.join(output_dir, "validation.csv")
     test_path = os.path.join(output_dir, "test.csv")
+
+    assert train["timestamp"].is_monotonic_increasing, "Train is not monotonic"
+    assert test["timestamp"].is_monotonic_increasing, "Test is not monotonic"
+    # assert validation["timestamp"].is_monotonic_increasing, "Validation is not monotonic"
 
     train.to_csv(train_path, index=False)
     validation.to_csv(validation_path, index=False)
