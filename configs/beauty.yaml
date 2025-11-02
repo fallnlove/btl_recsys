@@ -6,11 +6,7 @@ dataset:
   samplers: {}
 dataloader:
   train:
-    batch_size: 256
-    drop_last: false
-    shuffle: true
-  warm_val:
-    batch_size: 256
+    batch_size: 128
     drop_last: false
     shuffle: true
   validation:
