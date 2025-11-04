@@ -4,7 +4,7 @@
 
 Datasets were taken from [the Amazon Product Data repository](https://cseweb.ucsd.edu/~jmcauley/datasets/amazon/links.html).
 
-To unpack an Amazon dataset, use:
+To unpack an Amazon dataset, [download it](https://snap.stanford.edu/data/amazon/productGraph/kcore_5.json.gz) and then use:
 
 ```bash
 python3 scripts/make_amazon_df.py <path_to_raw_data_file>
