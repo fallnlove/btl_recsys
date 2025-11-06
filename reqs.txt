@@ -7,3 +7,5 @@ pandas
 click
 hydra-core
 optuna
+requests
+matplotlib
