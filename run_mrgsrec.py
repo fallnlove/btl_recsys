@@ -1,28 +1,22 @@
 import copy
 import json
 import time
+from pathlib import Path
 
 import hydra
+import pandas as pd
 import torch
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
-from pathlib import Path
-import pandas as pd
 
-from src.dataset import build_graph, SequenceDataset
+from src.dataset import SequenceDataset, build_graph
 from src.loss import MRGSRecLoss
-from src.metrics import BaseMetric, StatefullMetric
+from src.metrics import BaseMetric, NDCGMetric, StatefullMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
-from src.utils import (
-    BasicBatchProcessor,
-    create_logger,
-    fix_random_seed,
-    inference,
-    train,
-)
-from src.metrics import NDCGMetric
+from src.utils import (BasicBatchProcessor, create_logger, fix_random_seed,
+                       inference, train)
 
 logger = create_logger(name=__name__)
 seed_val = 42

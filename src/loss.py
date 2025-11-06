@@ -3,7 +3,6 @@ import torch.nn as nn
 
 
 class LocalObjective:
-
     def __init__(self):
         # TODO: add scalable softmax
         self._loss = nn.CrossEntropyLoss()
@@ -19,7 +18,6 @@ class LocalObjective:
 
 
 class GlobalObjective:
-
     def __init__(
         self,
         positive_prefix,
@@ -38,7 +36,6 @@ class GlobalObjective:
 
 
 class FusionObjective:
-
     def __init__(
         self,
         positive_prefix,
@@ -57,7 +54,6 @@ class FusionObjective:
 
 
 class ContrastiveObjective:
-
     def __init__(
         self,
         fst_embeddings_prefix,
@@ -137,7 +133,6 @@ class ContrastiveObjective:
 
 
 class MRGSRecLoss:
-
     def __init__(
         self,
         local_objective,

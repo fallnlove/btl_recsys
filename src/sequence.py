@@ -170,7 +170,7 @@ class SequentialEncoder(nn.Module):
         sequence_embeddings = self._item_embeddings(
             padded_sequence
         )  # (all_batch_events, embedding_dim)
-        sequence_embeddings *= self._item_embeddings.embedding_dim ** 0.5
+        sequence_embeddings *= self._item_embeddings.embedding_dim**0.5
 
         sequence_embeddings = self._prepare_sequence(
             seq_len, mask, batch_size, all_sample_lengths, sequence_embeddings

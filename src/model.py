@@ -9,7 +9,6 @@ from .utils import create_masked_tensor, get_activation_function
 
 
 class MRGSRecModel(nn.Module):
-
     def __init__(
         self,
         num_items,
@@ -163,8 +162,11 @@ class MRGSRecModel(nn.Module):
         sequence_user_embeddings, sequence_embeddings = self._sequential_part(inputs)
 
         # All embeddings after graph part
-        all_graph_enriched_user_embeddings, all_graph_enriched_item_embeddings = (
-            self._graph_encoder(self._user_embeddings, self._item_embeddings, ind)
+        (
+            all_graph_enriched_user_embeddings,
+            all_graph_enriched_item_embeddings,
+        ) = self._graph_encoder(
+            self._user_embeddings, self._item_embeddings, ind
         )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
 
         # Enriched embeddings of users from batch
@@ -285,13 +287,15 @@ class MRGSRecModel(nn.Module):
         sequence_scores = all_sample_sequence_embeddings @ all_final_item_embeddings.T
         # (all_batch_events, num_items + 2)
 
-        graph_positive_scores, graph_scores, graph_user_embeddings = (
-            self._get_graph_scores(
-                graph_user_embeddings,
-                bpr_positive_user_ids,
-                all_final_item_embeddings,
-                all_positive_sample_events,
-            )
+        (
+            graph_positive_scores,
+            graph_scores,
+            graph_user_embeddings,
+        ) = self._get_graph_scores(
+            graph_user_embeddings,
+            bpr_positive_user_ids,
+            all_final_item_embeddings,
+            all_positive_sample_events,
         )
 
         fusion_positive_scores, fusion_scores = self._get_fusion_scores(

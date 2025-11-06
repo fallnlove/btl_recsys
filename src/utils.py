@@ -133,7 +133,6 @@ def inference(dataloader, model, metrics, device):
 
     with torch.no_grad():
         for idx, batch in enumerate(dataloader):
-
             for key, value in batch.items():
                 batch[key] = value.to(device)
             batch["logits"] = model(batch)

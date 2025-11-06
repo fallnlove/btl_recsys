@@ -1,6 +1,7 @@
 from pathlib import Path
-import pandas as pd
+
 import click
+import pandas as pd
 
 REQUIRED_COLUMNS = ["user_id", "item_id", "rating", "timestamp"]
 
@@ -18,8 +19,7 @@ def main(filename: str):
     for column in REQUIRED_COLUMNS:
         if column not in df.columns:
             raise ValueError(
-                f"Not enough columns: {df.columns.tolist()} "
-                f"expected: {column}"
+                f"Not enough columns: {df.columns.tolist()} " f"expected: {column}"
             )
 
     # 2. user_id / item_id check
@@ -39,7 +39,6 @@ def main(filename: str):
     interactions_per_user = df["user_id"].value_counts()
     avg_interactions = interactions_per_user.mean()
     median_interactions = interactions_per_user.median()
-
 
     # 6. sparsity
     sparsity = len(df) / (num_users * num_items)

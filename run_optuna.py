@@ -8,9 +8,9 @@ import optuna
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
-from src.utils import create_logger
 from run_mrgsrec import run_train as run_mrgsrec
 from run_sasrec import run_train as run_sasrec
+from src.utils import create_logger
 
 logger = create_logger(name=__name__)
 

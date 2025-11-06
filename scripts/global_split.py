@@ -1,14 +1,14 @@
 import argparse
 import os
-
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
 
 def split_by_time(data, user_col, timestamp_col, quantile):
     # Filter interactions
-    df = (data.groupby(by="user_id").count()["item_id"] >= 3)
+    df = data.groupby(by="user_id").count()["item_id"] >= 3
     good_users = df[df].index
     data = data[data[user_col].isin(good_users)]
     data = data.reset_index(drop=True)
@@ -92,7 +92,9 @@ def main(
         train, validation, val_time_threshold = split_by_time(
             train, user_col, timestamp_col, val_quantile
         )
-        assert validation["timestamp"].is_monotonic_increasing, "Validation is not monotonic"
+        assert validation[
+            "timestamp"
+        ].is_monotonic_increasing, "Validation is not monotonic"
     elif validation_type == "last":
         train, validation = split_validation_last_train(train, user_col, timestamp_col)
     else:

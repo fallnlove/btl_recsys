@@ -8,7 +8,6 @@ class BaseMetric:
 
 
 class StatefullMetric(BaseMetric):
-
     def reduce(self):
         raise NotImplementedError
 
@@ -25,7 +24,6 @@ class StaticMetric:
 
 
 class CompositeMetric:
-
     def __init__(self, metrics):
         self._metrics = metrics
 
@@ -42,7 +40,6 @@ class CompositeMetric:
 
 
 class NDCGMetric:
-
     def __init__(self, k):
         self._k = k
 
@@ -68,7 +65,6 @@ class NDCGMetric:
 
 
 class RecallMetric:
-
     def __init__(self, k):
         self._k = k
 
@@ -89,7 +85,6 @@ class RecallMetric:
 
 
 class CoverageMetric:
-
     def __init__(self, k, num_items):
         self._k = k
         self._num_items = num_items
