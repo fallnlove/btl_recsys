@@ -15,11 +15,13 @@ from run_sasrec import run_train as run_sasrec
 def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
     cfg = deepcopy(base_cfg)
 
-    cfg.model.embedding_dim = trial.suggest_categorical(
-        "embedding_dim", [8, 16, 32, 64, 128]
-    )
-    cfg.model.dropout = trial.suggest_float("dropout", 0.0, 0.6)
-    # cfg.optimizer.optimizer.lr = trial.suggest_float("lr", 0.05, 0.1)
+    cfg.model.embedding_dim = trial.suggest_categorical("embedding_dim", [16, 32, 64, 128])
+    cfg.model.num_layers = trial.suggest_int("num_layers", 1, 4)
+    cfg.model.num_heads = trial.suggest_categorical("num_heads", [1, 2, 4])
+    cfg.model.dim_feedforward = trial.suggest_categorical("dim_feedforward", [32, 64, 128, 256])
+    cfg.model.dropout = trial.suggest_float("dropout", 0.0, 0.5, step=0.1)
+    cfg.optimizer.optimizer.lr = trial.suggest_loguniform("lr", 1e-4, 3e-3)
+
 
     return cfg
 

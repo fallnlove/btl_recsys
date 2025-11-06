@@ -27,7 +27,6 @@ class SequenceDataset:
         df = pd.read_csv(data_path)
         if mode != "val":
             user_items = df.groupby("user_id")["item_id"].apply(list).to_dict()
-            max_sequence_length = 10
             for user_idx, item_ids in sorted(
                 list(user_items.items()), key=lambda x: x[0]
             ):

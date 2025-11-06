@@ -6,3 +6,4 @@ ipykernel
 pandas
 click
 hydra-core
+optuna

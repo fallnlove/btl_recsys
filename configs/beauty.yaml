@@ -48,5 +48,5 @@ metrics:
   ndcg@10:
     type: ndcg
     k: 10
-device: "cuda:0"
+device: "cpu"
 
