@@ -51,8 +51,8 @@ def run_train(cfg):
 
     device = config["device"]
 
-    logger.info("Training config: \n{}".format(OmegaConf.to_yaml(config)))
-    logger.info("Current DEVICE: {}".format(device))
+    logger.info(f"Training config:\n{OmegaConf.to_yaml(config)}\n")
+    logger.info(f"Current DEVICE: {device}")
 
     # TODO: dumb a little
     all_data, train_path, val_path, test_path = unpack_dataset(config["dataset"])

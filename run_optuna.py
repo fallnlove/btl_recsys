@@ -8,20 +8,29 @@ import optuna
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
+from src.utils import create_logger
 from run_mrgsrec import run_train as run_mrgsrec
 from run_sasrec import run_train as run_sasrec
+
+logger = create_logger(name=__name__)
 
 
 def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
     cfg = deepcopy(base_cfg)
 
-    cfg.model.embedding_dim = trial.suggest_categorical("embedding_dim", [16, 32, 64, 128])
-    cfg.model.num_layers = trial.suggest_int("num_layers", 1, 4)
+    cfg.model.embedding_dim = trial.suggest_categorical(
+        "embedding_dim", [16, 32, 64, 128]
+    )
+    cfg.model.num_layers = trial.suggest_categorical("num_layers", [1, 2, 3, 4])
+    cfg.model.num_hops = trial.suggest_categorical("num_hops", [1, 2, 3])
     cfg.model.num_heads = trial.suggest_categorical("num_heads", [1, 2, 4])
-    cfg.model.dim_feedforward = trial.suggest_categorical("dim_feedforward", [32, 64, 128, 256])
+    cfg.model.dim_feedforward = trial.suggest_categorical(
+        "dim_feedforward", [32, 64, 128, 256]
+    )
     cfg.model.dropout = trial.suggest_float("dropout", 0.0, 0.5, step=0.1)
     cfg.optimizer.optimizer.lr = trial.suggest_loguniform("lr", 1e-4, 3e-3)
 
+    logger.info(f"Trial params: {trial.params}")
 
     return cfg
 
