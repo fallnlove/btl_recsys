@@ -4,12 +4,13 @@ from torch import nn
 
 
 class GraphEncoder(nn.Module):
-    def __init__(self, graph, dropout_rate, num_users, num_items):
+    def __init__(self, graph, dropout_rate, num_users, num_items, num_hops):
         super().__init__()
         self._graph = graph
         self._dropout_rate = dropout_rate
         self._num_users = num_users
         self._num_items = num_items
+        self._num_hops = num_hops
 
     def forward(self, user_embeddings, item_embeddings, ind=None):
         ego_embeddings = torch.cat(
@@ -41,7 +42,7 @@ class GraphEncoder(nn.Module):
         else:
             graph_dropped = self._graph
 
-        for i in range(1):
+        for _ in range(self._num_hops):
             ego_embeddings = torch.sparse.mm(graph_dropped, ego_embeddings)
             norm_embeddings = F.normalize(ego_embeddings, p=2, dim=1)
             all_embeddings += [norm_embeddings]

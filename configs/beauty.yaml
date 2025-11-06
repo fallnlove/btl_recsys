@@ -22,6 +22,7 @@ model:
   activation: gelu
   layer_norm_eps: 1.0e-09
   initializer_range: 0.02
+  num_hops: 2
 optimizer:
   optimizer:
     type: adam

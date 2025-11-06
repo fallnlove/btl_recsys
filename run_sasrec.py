@@ -73,7 +73,7 @@ def run_train(cfg):
     validation_sampler = SequenceDataset(
         val_path,
         config["dataset"]["max_sequence_length"],
-        mode="val",
+        mode="test",
         all_data=all_data,
     )
 

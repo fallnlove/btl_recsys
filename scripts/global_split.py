@@ -92,6 +92,7 @@ def main(
         train, validation, val_time_threshold = split_by_time(
             train, user_col, timestamp_col, val_quantile
         )
+        assert validation["timestamp"].is_monotonic_increasing, "Validation is not monotonic"
     elif validation_type == "last":
         train, validation = split_validation_last_train(train, user_col, timestamp_col)
     else:

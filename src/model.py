@@ -20,6 +20,7 @@ class MRGSRecModel(nn.Module):
         num_layers,
         dim_feedforward,
         graph,
+        num_hops,
         dropout=0.0,
         activation="relu",
         layer_norm_eps=1e-9,
@@ -34,7 +35,10 @@ class MRGSRecModel(nn.Module):
         self._num_layers = num_layers
         self._activation = get_activation_function(activation)
 
-        self._graph_encoder = GraphEncoder(graph, dropout, num_users, num_items)
+        self._num_hops = num_hops
+        self._graph_encoder = GraphEncoder(
+            graph, dropout, num_users, num_items, num_hops
+        )
 
         self._user_embeddings = nn.Embedding(
             num_embeddings=self._num_users + 2,
@@ -93,6 +97,7 @@ class MRGSRecModel(nn.Module):
             num_layers=config["num_layers"],
             dim_feedforward=config.get("dim_feedforward", 4 * config["embedding_dim"]),
             graph=kwargs["graph"],
+            num_hops=config["num_hops"],
             dropout=config.get("dropout", 0.0),
             activation=config.get("activation", "relu"),
             layer_norm_eps=config.get("layer_norm_eps", 1e-9),
