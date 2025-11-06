@@ -127,22 +127,23 @@ def run_train(cfg):
     )
 
     # Train process
-    best_metric = train(
+    metrics = train(
         dataloader=train_dataloader,
         warm_dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
         optimizer_fi=optimizer_fi,
         loss_function=loss_function,
-        num_epochs=config.get("num_epochs", 100),
-        early_stopping_rounds=config.get("early_stopping_rounds", 10),
+        num_epochs=config["num_epochs"],
+        early_stopping_rounds=config["early_stopping_rounds"],
         best_metric=config.get("best_metric"),
         inference_dict_validation=inference_dict_validation,
         inference_dict_test=inference_dict_test,
         device=device,
     )
-    print(f"ndcg@10 = {best_metric}")
-    return best_metric
+    print(f"val/ndcg@10 = {metrics['val']}")
+    print(f"test/ndcg@10 = {metrics['test']}")
+    return metrics
 
 
 if __name__ == "__main__":

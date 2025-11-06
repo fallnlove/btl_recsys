@@ -175,7 +175,8 @@ def train(
 ):
     logger.debug("Start training...")
     train_start = time.time()
-    best_metric = 0.0
+    best_val_metric = 0.0
+    best_test_metric = 0.0
     best_epoch = 0
     for epoch_num in range(num_epochs):
         logger.debug(f"Start epoch {epoch_num}")
@@ -189,10 +190,10 @@ def train(
             optimizer.step(loss)
         print("VAL")
         current_metric = inference(**inference_dict_validation)
-        print("TEST")
-        inference(**inference_dict_test)
-        if current_metric > best_metric:
-            best_metric = current_metric
+        if current_metric > best_val_metric:
+            print("TEST")
+            best_test_metric = inference(**inference_dict_test)
+            best_val_metric = current_metric
             best_epoch = epoch_num
         elif epoch_num - best_epoch > early_stopping_rounds:
             print(f"no more improve in {early_stopping_rounds} epoch")
@@ -200,4 +201,4 @@ def train(
 
     train_end = time.time()
     print("Total time:", train_end - train_start)
-    return best_metric
+    return {"val": best_val_metric, "test": best_test_metric}

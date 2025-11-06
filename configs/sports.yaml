@@ -53,4 +53,5 @@ metrics:
     type: ndcg
     k: 10
 device: "cuda:0"
-
+num_epochs: 100
+early_stopping_rounds: 20

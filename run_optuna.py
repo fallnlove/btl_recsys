@@ -36,26 +36,33 @@ def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
 
 
 def save_trial_results(
-    outdir: Path, trial_id: int, params: dict, result, index_path: str
+    outdir: Path, trial_id: int, params: dict, metrics, index_path: str
 ) -> Path:
     trial_name = f"trial-{trial_id:04d}"
     results_path = outdir / f"results_{trial_name}.json"
     payload = {
         "params": params,
-        "ndcg@10": result,
+        "val/ndcg@10": metrics["val"],
+        "test/ndcg@10": metrics["test"],
     }
     with open(results_path, "w") as f:
         json.dump(payload, f, indent=2)
-    update_index(index_path, trial_id, params, result, results_path)
+    update_index(index_path, trial_id, params, metrics, results_path)
 
 
 def update_index(
-    index_path: Path, trial_id: int, params: dict, result, results_path: Path
+    index_path: Path, trial_id: int, params: dict, metrics, results_path: Path
 ):
     trial_name = f"trial-{trial_id:04d}"
 
     row = {"trial": trial_name, "results_path": str(results_path)}
-    row.update(params | {"ndcg@10": result})
+    row.update(
+        params
+        | {
+            "val/ndcg@10": metrics["val"],
+            "test/ndcg@10": metrics["test"],
+        }
+    )
 
     if index_path.exists():
         df = pd.read_csv(index_path)
@@ -96,11 +103,11 @@ def main(config_path, num_trials, exp_name, model):
     def objective_fn(trial: optuna.trial.Trial) -> float:
         cfg = update_cfg(base_cfg, trial)
 
-        result = run_train(cfg)
+        metrics = run_train(cfg)
 
-        save_trial_results(outdir, trial.number, trial.params, result, index_path)
+        save_trial_results(outdir, trial.number, trial.params, metrics, index_path)
 
-        return result
+        return metrics["val"]
 
     study.optimize(objective_fn, n_trials=num_trials)
 
