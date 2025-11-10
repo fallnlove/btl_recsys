@@ -88,10 +88,13 @@ def update_index(
 @click.option("--exp_name", "-en", type=str)
 @click.option("--model_name", "-mn", type=str)
 @click.option("--parallel_mode", "-pm", is_flag=True, default=False)
-def main(config_path, num_trials, exp_name, model_name, parallel_mode):
+@click.option("--dataset_name", "-ds", default=None)
+def main(config_path, num_trials, exp_name, model_name, parallel_mode, dataset_name):
     base_cfg = OmegaConf.load(config_path)
     base_cfg = OmegaConf.create(OmegaConf.to_container(base_cfg, resolve=True))
     base_cfg["model_name"] = model_name
+    if dataset_name is not None:
+        base_cfg["dataset"]["name"] = dataset_name
 
     outdir = Path("optuna_outputs") / exp_name
     if parallel_mode:
