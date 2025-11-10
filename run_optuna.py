@@ -47,11 +47,7 @@ def save_trial_results(
 ) -> Path:
     trial_name = f"trial-{trial_id:04d}"
     results_path = outdir / f"results_{trial_name}.json"
-    payload = {
-        "params": params,
-        "val/ndcg@10": metrics["val"],
-        "test/ndcg@10": metrics["test"],
-    }
+    payload = {"params": params} | metrics
     with open(results_path, "w") as f:
         json.dump(payload, f, indent=2)
     update_index(index_path, trial_id, params, metrics, results_path)
@@ -63,13 +59,7 @@ def update_index(
     trial_name = f"trial-{trial_id:04d}"
 
     row = {"trial": trial_name, "results_path": str(results_path)}
-    row.update(
-        params
-        | {
-            "val/ndcg@10": metrics["val"],
-            "test/ndcg@10": metrics["test"],
-        }
-    )
+    row.update(params | metrics)
 
     if index_path.exists():
         df = pd.read_csv(index_path)
@@ -121,7 +111,7 @@ def main(config_path, num_trials, exp_name, model_name, parallel_mode, dataset_n
 
         save_trial_results(outdir, trial.number, trial.params, metrics, index_path)
 
-        return metrics["val"]
+        return metrics["val/ndcg@10"]
 
     study.optimize(objective_fn, n_trials=num_trials)
 

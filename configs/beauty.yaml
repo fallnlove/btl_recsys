@@ -54,6 +54,6 @@ metrics:
   ndcg@10:
     type: ndcg
     k: 10
-device: "cpu"
+device: "cuda"
 num_epochs: 100
 early_stopping_rounds: 20

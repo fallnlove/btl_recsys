@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .metrics import StatefullMetric
+from .metrics import CoverageMetric
 
 
 def create_logger(
@@ -144,23 +144,24 @@ def inference(dataloader, model, metrics, device):
                 running_metrics[metric_name].extend(metric_function(inputs=batch))
 
         for metric_name, metric_function in metrics.items():
-            if isinstance(metric_function, StatefullMetric):
+            if isinstance(metric_function, CoverageMetric):
                 running_metrics[metric_name] = metric_function.reduce(
                     running_metrics[metric_name]
                 )
 
     print("Inference procedure has been finished!")
     print("Metrics are the following:")
+    results = {}
     for metric_name, metric_value in running_metrics.items():
+        results[metric_name] = np.mean(metric_value)
         print("{}: {}".format(metric_name, np.mean(metric_value)))
-        return np.mean(metric_value)
     print("Metrics finished!")
     model.train()
+    return results
 
 
 def train(
     dataloader,
-    warm_dataloader,
     model,
     optimizer,
     loss_function,
@@ -174,7 +175,6 @@ def train(
     logger.debug("Start training...")
     train_start = time.time()
     best_val_metric = 0.0
-    best_test_metric = 0.0
     best_epoch = 0
     for epoch_num in range(num_epochs):
         logger.debug(f"Start epoch {epoch_num}")
@@ -187,16 +187,25 @@ def train(
             loss = loss_function(batch)
             optimizer.step(loss)
         print("VAL")
-        current_metric = inference(**inference_dict_validation)
-        if current_metric > best_val_metric:
-            print("TEST")
-            best_test_metric = inference(**inference_dict_test)
-            best_val_metric = current_metric
+        val_metrics = inference(**inference_dict_validation)
+        print("TEST")
+        test_metrics = inference(**inference_dict_test)
+        val_ndcg = val_metrics["ndcg@10"]
+        if val_ndcg > best_val_metric:
+            best_val_metric = val_ndcg
             best_epoch = epoch_num
         elif epoch_num - best_epoch > early_stopping_rounds:
             print(f"no more improve in {early_stopping_rounds} epoch")
             break
 
+    all_metrics = {
+        f"val/{metric_name}": metric_value
+        for metric_name, metric_value in val_metrics.items()
+    }
+    all_metrics |= {
+        f"test/{metric_name}": metric_value
+        for metric_name, metric_value in test_metrics.items()
+    }
     train_end = time.time()
     print("Total time:", train_end - train_start)
-    return {"val": best_val_metric, "test": best_test_metric}
+    return all_metrics

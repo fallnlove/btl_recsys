@@ -55,5 +55,5 @@ metrics:
     type: ndcg
     k: 10
 device: "cpu"
-num_epochs: 100
+num_epochs: 1
 early_stopping_rounds: 20

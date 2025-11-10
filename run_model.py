@@ -13,7 +13,7 @@ from tqdm import tqdm, trange
 
 from src.dataset import SequenceDataset, build_graph
 from src.loss import LocalObjective, MRGSRecLoss
-from src.metrics import NDCGMetric
+from src.metrics import NDCGMetric, CoverageMetric, RecallMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
 from src.sequence import SequentialEncoder
@@ -140,7 +140,11 @@ def run_train(cfg):
 
     logger.debug("Everything is ready for training process!")
 
-    metrics = {"ndcg@10": NDCGMetric(10)}
+    metrics = {
+        "ndcg@10": NDCGMetric(10),
+        "coverage@10": CoverageMetric(10, dataset_meta["num_items"]),
+        "recall@10": RecallMetric(10),
+    }
 
     inference_dict_validation = dict(
         dataloader=validation_dataloader,
@@ -159,7 +163,6 @@ def run_train(cfg):
     # Train process
     metrics = train(
         dataloader=train_dataloader,
-        warm_dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
         loss_function=loss_function,
@@ -170,8 +173,7 @@ def run_train(cfg):
         inference_dict_validation=inference_dict_validation,
         inference_dict_test=inference_dict_test,
     )
-    print(f"val/ndcg@10 = {metrics['val']}")
-    print(f"test/ndcg@10 = {metrics['test']}")
+    print(metrics)
     return metrics
 
 
