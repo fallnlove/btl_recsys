@@ -17,8 +17,13 @@ from src.metrics import NDCGMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
 from src.sequence import SequentialEncoder
-from src.utils import (BasicBatchProcessor, create_logger, fix_random_seed,
-                       inference, train)
+from src.utils import (
+    BasicBatchProcessor,
+    create_logger,
+    fix_random_seed,
+    inference,
+    train,
+)
 
 logger = create_logger(name=__name__)
 seed_val = 42
@@ -123,12 +128,15 @@ def run_train(cfg):
         graph = build_graph(
             train_sampler, config["dataset"]["path_to_data_dir"], device, dataset_meta
         )
-        model = MRGSRecModel.create_from_config(
-            config["model"], graph=graph, **dataset_meta
-        ).to(device)
+        model = MRGSRecModel(
+            cfg=config["model"],
+            num_items=dataset_meta["num_items"],
+            num_users=dataset_meta["num_users"],
+            max_sequence_length=dataset_meta["max_sequence_length"],
+            graph=graph,
+        )
         loss_function = MRGSRecLoss.create_from_config(config["loss"])
         optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
-
 
     logger.debug("Everything is ready for training process!")
 

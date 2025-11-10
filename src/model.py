@@ -11,32 +11,30 @@ from .utils import create_masked_tensor, get_activation_function
 class MRGSRecModel(nn.Module):
     def __init__(
         self,
+        cfg,
         num_items,
         num_users,
         max_sequence_length,
-        embedding_dim,
-        num_heads,
-        num_layers,
-        dim_feedforward,
         graph,
-        num_hops,
-        dropout=0.0,
-        activation="relu",
-        layer_norm_eps=1e-9,
-        initializer_range=0.02,
     ):
         super().__init__()
+        # dataset meta
         self._num_items = num_items
         self._num_users = num_users
         self._max_sequence_length = max_sequence_length
-        self._embedding_dim = embedding_dim
-        self._num_heads = num_heads
-        self._num_layers = num_layers
-        self._activation = get_activation_function(activation)
+        # model params
+        self._embedding_dim = cfg["embedding_dim"]
+        self._num_heads = cfg["num_heads"]
+        self._num_layers = cfg["num_layers"]
+        self._dim_feedforward = cfg["dim_feedforward"]
+        self._dropout = cfg["dropout"]
+        self._activation = get_activation_function(cfg["activation"])
+        self._layer_norm_eps = cfg["layer_norm_eps"]
+        self._initializer_range = cfg["initializer_range"]
+        self._num_hops = cfg["num_hops"]
 
-        self._num_hops = num_hops
         self._graph_encoder = GraphEncoder(
-            graph, dropout, num_users, num_items, num_hops
+            graph, self._dropout, num_users, num_items, self._num_hops
         )
 
         self._user_embeddings = nn.Embedding(
@@ -55,29 +53,29 @@ class MRGSRecModel(nn.Module):
         self._position_embeddings = nn.Embedding(
             num_embeddings=max_sequence_length
             + 1,  # in order to include `max_sequence_length` value
-            embedding_dim=embedding_dim,
+            embedding_dim=self._embedding_dim,
         )
 
         self._sequential_encoder = SequentialEncoder(
-            embedding_dim,
-            num_heads,
-            dim_feedforward,
-            dropout,
+            self._embedding_dim,
+            self._num_heads,
+            self._dim_feedforward,
+            self._dropout,
             self._activation,
-            layer_norm_eps,
-            num_layers,
+            self._layer_norm_eps,
+            self._num_layers,
             self._num_items,
             self._position_embeddings,
             self._item_embeddings,
         )
 
         self._fusion_part = nn.Sequential(
-            nn.Linear(2 * embedding_dim, dim_feedforward),
+            nn.Linear(2 * self._embedding_dim, self._dim_feedforward),
             self._activation,
-            nn.Linear(dim_feedforward, embedding_dim),
+            nn.Linear(self._dim_feedforward, self._embedding_dim),
         )
 
-        self._init_weights(initializer_range)
+        self._init_weights(self._initializer_range)
         dummy = torch.empty(0)
         self.register_buffer("_device_anchor", dummy, persistent=False)
 
@@ -92,15 +90,15 @@ class MRGSRecModel(nn.Module):
             num_users=kwargs["num_users"],
             max_sequence_length=kwargs["max_sequence_length"],
             embedding_dim=config["embedding_dim"],
-            num_heads=config.get("num_heads", int(config["embedding_dim"] // 64)),
+            num_heads=config["num_heads"],
             num_layers=config["num_layers"],
-            dim_feedforward=config.get("dim_feedforward", 4 * config["embedding_dim"]),
+            dim_feedforward=config["dim_feedforward"],
             graph=kwargs["graph"],
             num_hops=config["num_hops"],
-            dropout=config.get("dropout", 0.0),
-            activation=config.get("activation", "relu"),
-            layer_norm_eps=config.get("layer_norm_eps", 1e-9),
-            initializer_range=config.get("initializer_range", 0.02),
+            dropout=config["dropout"],
+            activation=config["activation"],
+            layer_norm_eps=config["layer_norm_eps"],
+            initializer_range=config["initializer_range"],
         )
 
     @torch.no_grad()
