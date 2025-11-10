@@ -3,12 +3,11 @@ from copy import deepcopy
 from pathlib import Path
 
 import click
-import numpy as np
 import optuna
-from optuna.storages import JournalStorage
-from optuna.storages.journal import JournalFileBackend
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
+from optuna.storages import JournalStorage
+from optuna.storages.journal import JournalFileBackend
 
 from run_model import run_train
 from src.utils import create_logger

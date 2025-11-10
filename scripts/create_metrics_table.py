@@ -1,7 +1,7 @@
-import pandas as pd
-
-from tqdm import tqdm
 from pathlib import Path
+
+import pandas as pd
+from tqdm import tqdm
 
 optuna_folder = Path("/Users/arturgimranov/Downloads/optuna_outputs2")
 hp_names = [
