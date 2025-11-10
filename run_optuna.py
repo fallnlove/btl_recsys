@@ -31,6 +31,11 @@ def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
     cfg.model.dropout = trial.suggest_float("dropout", 0.0, 0.5, step=0.1)
     cfg.optimizer.optimizer.lr = trial.suggest_loguniform("lr", 1e-4, 3e-3)
 
+    cfg.loss.local_coef = trial.suggest_float("local_coef", 0.0, 1.0)
+    cfg.loss.global_coef = trial.suggest_float("global_coef", 0.0, 1.0)
+    cfg.loss.fusion_coef = trial.suggest_float("fusion_coef", 0.0, 1.0)
+    cfg.loss.contrastive_coef = trial.suggest_float("contrastive_coef", 0.0, 1.0)
+
     logger.info(f"Trial params: {trial.params}")
 
     return cfg

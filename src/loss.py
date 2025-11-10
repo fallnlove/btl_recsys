@@ -134,6 +134,12 @@ class ContrastiveObjective:
 
 class MRGSRecLoss:
     def __init__(self, cfg):
+        # coefs
+        self.local_coef = cfg["local_coef"]
+        self.global_coef = cfg["global_coef"]
+        self.fusion_coef = cfg["fusion_coef"]
+        self.contrastive_coef = cfg["contrastive_coef"]
+        # objectives
         self._local_objective = LocalObjective()
         self._global_objective = GlobalObjective(
             positive_prefix=cfg["global"]["positive_prefix"],
@@ -153,8 +159,8 @@ class MRGSRecLoss:
 
     def __call__(self, inputs):
         return (
-            1 * self._local_objective(inputs)
-            + 0.2 * self._global_objective(inputs)
-            + 0.4 * self._fusion_objective(inputs)
-            + 0.05 * self._contrastive_objective(inputs)
+            self.local_coef * self._local_objective(inputs)
+            + self.global_coef * self._global_objective(inputs)
+            + self.fusion_coef * self._fusion_objective(inputs)
+            + self.contrastive_coef * self._contrastive_objective(inputs)
         )

@@ -45,6 +45,10 @@ loss:
   contrastive:
     fst_embeddings_prefix: contrastive_fst_embeddings
     snd_embeddings_prefix: contrastive_snd_embeddings
+  local_coef: 1.0
+  global_coef: 0.2
+  fusion_coef: 0.4
+  contrastive_coef: 0.05
 metrics:
   ndcg@10:
     type: ndcg
