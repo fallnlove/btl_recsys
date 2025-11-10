@@ -42,6 +42,8 @@ def main(cfg):
 
 
 def run_train(cfg):
+    model_name = cfg["model_name"]
+    assert model_name in ["sasrec", "mrgsrec"]
     fix_random_seed(seed_val)
     config = OmegaConf.to_container(cfg, resolve=True)
 
@@ -91,34 +93,42 @@ def run_train(cfg):
         dataset=test_sampler, **config["dataloader"]["validation"], collate_fn=collator
     )
 
-    _embedding_dim = config["model"]["embedding_dim"]
-    _num_users = dataset_meta["num_users"]
-    _num_items = dataset_meta["num_items"]
-    _max_sequence_length = dataset_meta["max_sequence_length"]
+    if model_name == "sasrec":
+        _embedding_dim = config["model"]["embedding_dim"]
+        _num_users = dataset_meta["num_users"]
+        _num_items = dataset_meta["num_items"]
+        _max_sequence_length = dataset_meta["max_sequence_length"]
 
-    item_embeddings = nn.Embedding(
-        num_embeddings=_num_items + 2,
-        embedding_dim=_embedding_dim,
-        padding_idx=0,
-    )
-    position_embeddings = nn.Embedding(
-        num_embeddings=_max_sequence_length
-        + 1,  # in order to include `max_sequence_length` value
-        embedding_dim=_embedding_dim,
-    )
-    del config["model"]["initializer_range"]
-    del config["model"]["num_hops"]
-    model = SequentialEncoder(
-        **config["model"],
-        position_embeddings=position_embeddings,
-        item_embeddings=item_embeddings,
-        num_items=_num_items,
-    ).to(device)
-    loss_function = LocalObjective()
-    optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
-    optimizer_fi = BasicOptimizer.create_from_config(
-        config["optimizer_fi"], model=model
-    )
+        item_embeddings = nn.Embedding(
+            num_embeddings=_num_items + 2,
+            embedding_dim=_embedding_dim,
+            padding_idx=0,
+        )
+        position_embeddings = nn.Embedding(
+            num_embeddings=_max_sequence_length
+            + 1,  # in order to include `max_sequence_length` value
+            embedding_dim=_embedding_dim,
+        )
+        del config["model"]["initializer_range"]
+        del config["model"]["num_hops"]
+        model = SequentialEncoder(
+            **config["model"],
+            position_embeddings=position_embeddings,
+            item_embeddings=item_embeddings,
+            num_items=_num_items,
+        ).to(device)
+        loss_function = LocalObjective()
+        optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
+    elif model_name == "mrgsrec":
+        graph = build_graph(
+            train_sampler, config["dataset"]["path_to_data_dir"], device, dataset_meta
+        )
+        model = MRGSRecModel.create_from_config(
+            config["model"], graph=graph, **dataset_meta
+        ).to(device)
+        loss_function = MRGSRecLoss.create_from_config(config["loss"])
+        optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
+
 
     logger.debug("Everything is ready for training process!")
 
@@ -144,7 +154,6 @@ def run_train(cfg):
         warm_dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
-        optimizer_fi=optimizer_fi,
         loss_function=loss_function,
         num_epochs=config["num_epochs"],
         early_stopping_rounds=config["early_stopping_rounds"],

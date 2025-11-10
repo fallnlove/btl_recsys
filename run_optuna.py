@@ -5,11 +5,12 @@ from pathlib import Path
 import click
 import numpy as np
 import optuna
+from optuna.storages import JournalStorage
+from optuna.storages.journal import JournalFileBackend
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
-from run_mrgsrec import run_train as run_mrgsrec
-from run_sasrec import run_train as run_sasrec
+from run_model import run_train
 from src.utils import create_logger
 
 logger = create_logger(name=__name__)
@@ -80,24 +81,28 @@ def update_index(
 @click.option("--config_path", "-cp", type=str)
 @click.option("--num_trials", "-nt", type=int)
 @click.option("--exp_name", "-en", type=str)
-@click.option("--model", "-m", type=str)
-def main(config_path, num_trials, exp_name, model):
-    if model == "sasrec":
-        run_train = run_sasrec
-    elif model == "mrgsrec":
-        run_train = run_mrgsrec
-    else:
-        assert False, "wrong model"
+@click.option("--model_name", "-mn", type=str)
+@click.option("--parallel_mode", "-pm", is_flag=True, default=False)
+def main(config_path, num_trials, exp_name, model_name, parallel_mode):
     base_cfg = OmegaConf.load(config_path)
     base_cfg = OmegaConf.create(OmegaConf.to_container(base_cfg, resolve=True))
+    base_cfg["model_name"] = model_name
 
     outdir = Path("optuna_outputs") / exp_name
-    outdir.mkdir(exist_ok=False)
+    if parallel_mode:
+        outdir.mkdir(exist_ok=True)
+    else:
+        outdir.mkdir(exist_ok=False)
     index_path = outdir / "index.csv"
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(seed=int(base_cfg.get("seed", 42))),
+        sampler=optuna.samplers.TPESampler(),
+        study_name=exp_name,
+        storage=JournalStorage(
+            JournalFileBackend(file_path=str(outdir / f"./{exp_name}.log"))
+        ),
+        load_if_exists=True,
     )
 
     def objective_fn(trial: optuna.trial.Trial) -> float:

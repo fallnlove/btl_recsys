@@ -163,7 +163,6 @@ def train(
     warm_dataloader,
     model,
     optimizer,
-    optimizer_fi,
     loss_function,
     num_epochs,
     early_stopping_rounds,
