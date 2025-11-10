@@ -174,6 +174,7 @@ def train(
     train_start = time.time()
     best_val_metric = 0.0
     best_epoch = 0
+    best_metrics = {}
     for epoch_num in range(num_epochs):
         logger.debug(f"Start epoch {epoch_num}")
         for step, batch in tqdm(
@@ -188,22 +189,25 @@ def train(
         val_metrics = inference(**inference_dict_validation)
         print("TEST")
         test_metrics = inference(**inference_dict_test)
+
+        all_metrics = {
+            f"val/{metric_name}": metric_value
+            for metric_name, metric_value in val_metrics.items()
+        }
+        all_metrics |= {
+            f"test/{metric_name}": metric_value
+            for metric_name, metric_value in test_metrics.items()
+        }
+
         val_ndcg = val_metrics["ndcg@10"]
         if val_ndcg > best_val_metric:
+            best_metrics = all_metrics
             best_val_metric = val_ndcg
             best_epoch = epoch_num
         elif epoch_num - best_epoch > early_stopping_rounds:
             print(f"no more improve in {early_stopping_rounds} epoch")
             break
 
-    all_metrics = {
-        f"val/{metric_name}": metric_value
-        for metric_name, metric_value in val_metrics.items()
-    }
-    all_metrics |= {
-        f"test/{metric_name}": metric_value
-        for metric_name, metric_value in test_metrics.items()
-    }
     train_end = time.time()
     print("Total time:", train_end - train_start)
-    return all_metrics
+    return best_metrics
