@@ -133,39 +133,22 @@ class ContrastiveObjective:
 
 
 class MRGSRecLoss:
-    def __init__(
-        self,
-        local_objective,
-        global_objective,
-        fusion_objective,
-        contrastive_objective,
-    ):
-        self._local_objective = local_objective
-        self._global_objective = global_objective
-        self._fusion_objective = fusion_objective
-        self._contrastive_objective = contrastive_objective
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            local_objective=LocalObjective(),
-            global_objective=GlobalObjective(
-                positive_prefix=config["global"]["positive_prefix"],
-                negative_prefix=config["global"]["negative_prefix"],
-            ),
-            fusion_objective=FusionObjective(
-                positive_prefix=config["fusion"]["positive_prefix"],
-                negative_prefix=config["fusion"]["negative_prefix"],
-            ),
-            contrastive_objective=ContrastiveObjective(
-                fst_embeddings_prefix=config["contrastive"]["fst_embeddings_prefix"],
-                snd_embeddings_prefix=config["contrastive"]["snd_embeddings_prefix"],
-                tau=config["contrastive"].get("tau", 1.0),
-                normalize_embeddings=config["contrastive"].get(
-                    "normalize_embeddings", True
-                ),
-                use_mean=config["contrastive"].get("use_mean", True),
-            ),
+    def __init__(self, cfg):
+        self._local_objective = LocalObjective()
+        self._global_objective = GlobalObjective(
+            positive_prefix=cfg["global"]["positive_prefix"],
+            negative_prefix=cfg["global"]["negative_prefix"],
+        )
+        self._fusion_objective = FusionObjective(
+            positive_prefix=cfg["fusion"]["positive_prefix"],
+            negative_prefix=cfg["fusion"]["negative_prefix"],
+        )
+        self._contrastive_objective = ContrastiveObjective(
+            fst_embeddings_prefix=cfg["contrastive"]["fst_embeddings_prefix"],
+            snd_embeddings_prefix=cfg["contrastive"]["snd_embeddings_prefix"],
+            tau=cfg["contrastive"].get("tau", 1.0),
+            normalize_embeddings=cfg["contrastive"].get("normalize_embeddings", True),
+            use_mean=cfg["contrastive"].get("use_mean", True),
         )
 
     def __call__(self, inputs):

@@ -135,7 +135,7 @@ def run_train(cfg):
             max_sequence_length=dataset_meta["max_sequence_length"],
             graph=graph,
         )
-        loss_function = MRGSRecLoss.create_from_config(config["loss"])
+        loss_function = MRGSRecLoss(config["loss"])
         optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
 
     logger.debug("Everything is ready for training process!")
