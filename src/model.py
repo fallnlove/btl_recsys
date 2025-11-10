@@ -32,7 +32,8 @@ class MRGSRecModel(nn.Module):
         self._layer_norm_eps = cfg["layer_norm_eps"]
         self._initializer_range = cfg["initializer_range"]
         self._num_hops = cfg["num_hops"]
-
+        self._eta = cfg["eta"]
+        # layers
         self._graph_encoder = GraphEncoder(
             graph, self._dropout, num_users, num_items, self._num_hops
         )
@@ -237,7 +238,8 @@ class MRGSRecModel(nn.Module):
             torch.cat(
                 [
                     sequence_user_embeddings,
-                    0.1 * sequence_user_embeddings + 0.9 * graph_user_embeddings,
+                    (1 - self._eta) * sequence_user_embeddings
+                    + self._eta * graph_user_embeddings,
                 ],
                 dim=1,
             )
