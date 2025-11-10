@@ -123,7 +123,7 @@ def run_train(cfg):
             num_users=dataset_meta["num_users"],
             max_sequence_length=dataset_meta["max_sequence_length"],
             graph=graph,
-        )
+        ).to(device)
         loss_function = MRGSRecLoss(config["loss"])
         optimizer = BasicOptimizer.create_from_config(config["optimizer"], model=model)
 
