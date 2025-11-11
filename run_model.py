@@ -1,6 +1,8 @@
 from pathlib import Path
+import json
 
 import hydra
+from hydra.core.hydra_config import HydraConfig
 import pandas as pd
 from omegaconf import OmegaConf
 from torch import nn
@@ -163,7 +165,10 @@ def run_train(cfg):
         inference_dict_validation=inference_dict_validation,
         inference_dict_test=inference_dict_test,
     )
-    print(metrics)
+    output_dir = Path(HydraConfig.get().runtime.output_dir)
+    with open(output_dir / "metrics.json", "w") as f:
+        json.dump(metrics, f, indent=2)
+
     return metrics
 
 
