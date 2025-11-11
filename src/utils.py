@@ -3,10 +3,13 @@ import json
 import logging
 import random
 import time
+from collections import defaultdict
 
 import numpy as np
 import torch
 from tqdm import tqdm
+from matplotlib import pyplot as plt
+from pathlib import Path
 
 from .metrics import CoverageMetric
 
@@ -175,6 +178,7 @@ def train(
     best_val_metric = 0.0
     best_epoch = 0
     best_metrics = {}
+    all_metrics_list = []
     for epoch_num in range(num_epochs):
         logger.debug(f"Start epoch {epoch_num}")
         for step, batch in tqdm(
@@ -199,6 +203,8 @@ def train(
             for metric_name, metric_value in test_metrics.items()
         }
 
+        all_metrics_list.append(all_metrics)
+
         val_ndcg = val_metrics["ndcg@10"]
         if val_ndcg > best_val_metric:
             best_metrics = all_metrics
@@ -210,4 +216,45 @@ def train(
 
     train_end = time.time()
     print("Total time:", train_end - train_start)
-    return best_metrics
+    return all_metrics_list, best_metrics
+
+
+def save_metrics(all_metrics: list[dict], output_dir: str | Path):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    metrics_per_split = defaultdict(lambda: defaultdict(list))
+
+    for epoch_metrics in all_metrics:
+        for key, value in epoch_metrics.items():
+            split, metric_name = key.split("/", 1)
+            metrics_per_split[split][metric_name].append(value)
+
+    metric_names = sorted(
+        {name for split in metrics_per_split.values() for name in split}
+    )
+
+    def plot_metric(metric_name):
+        plt.figure(figsize=(6, 4))
+        for split, metrics in metrics_per_split.items():
+            if metric_name in metrics:
+                plt.plot(
+                    range(1, len(metrics[metric_name]) + 1),
+                    metrics[metric_name],
+                    marker="o",
+                    label=split,
+                )
+        plt.title(metric_name)
+        plt.xlabel("Epoch")
+        plt.ylabel(metric_name)
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        save_path = output_dir / f"{metric_name.replace('@', '_at_')}.png"
+        plt.savefig(save_path, dpi=200)
+        plt.close()
+
+    for name in metric_names:
+        plot_metric(name)
+
+    print(f"✅ Saved {len(metric_names) + 1} plots to {output_dir.resolve()}")

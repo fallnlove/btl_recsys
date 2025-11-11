@@ -106,7 +106,7 @@ def main(config_path, num_trials, exp_name, model_name, parallel_mode, dataset_n
     def objective_fn(trial: optuna.trial.Trial) -> float:
         cfg = update_cfg(base_cfg, trial)
 
-        metrics = run_train(cfg)
+        _, metrics = run_train(cfg)
 
         save_trial_results(outdir, trial.number, trial.params, metrics, index_path)
 

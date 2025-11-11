@@ -14,7 +14,13 @@ from src.metrics import CoverageMetric, NDCGMetric, RecallMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
 from src.sequence import SequentialEncoder
-from src.utils import BasicBatchProcessor, create_logger, fix_random_seed, train
+from src.utils import (
+    BasicBatchProcessor,
+    create_logger,
+    fix_random_seed,
+    train,
+    save_metrics,
+)
 
 logger = create_logger(name=__name__)
 seed_val = 42
@@ -34,7 +40,12 @@ def unpack_dataset(dataset_config):
 
 @hydra.main(version_base=None, config_path="configs", config_name="ml1m")
 def main(cfg):
-    run_train(cfg)
+    all_metrics_list, metrics = run_train(cfg)
+
+    output_dir = Path(HydraConfig.get().runtime.output_dir)
+    with open(output_dir / "metrics.json", "w") as f:
+        json.dump(metrics, f, indent=2)
+    save_metrics(all_metrics_list, output_dir)
 
 
 def run_train(cfg):
@@ -150,7 +161,7 @@ def run_train(cfg):
     )
 
     # Train process
-    metrics = train(
+    all_metrics_list, metrics = train(
         dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
@@ -162,11 +173,8 @@ def run_train(cfg):
         inference_dict_validation=inference_dict_validation,
         inference_dict_test=inference_dict_test,
     )
-    output_dir = Path(HydraConfig.get().runtime.output_dir)
-    with open(output_dir / "metrics.json", "w") as f:
-        json.dump(metrics, f, indent=2)
 
-    return metrics
+    return all_metrics_list, metrics
 
 
 if __name__ == "__main__":
