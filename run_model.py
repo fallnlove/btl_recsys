@@ -105,6 +105,7 @@ def run_train(cfg):
         )
         del config["model"]["initializer_range"]
         del config["model"]["num_hops"]
+        del config["model"]["eta"]
         model = SequentialEncoder(
             **config["model"],
             position_embeddings=position_embeddings,
