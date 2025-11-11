@@ -1,0 +1,13 @@
+loss:
+  local:
+    predictions_prefix: local_prediction
+    labels_prefix: positive
+  global:
+    positive_prefix: global_positive
+    negative_prefix: global_negative
+  fusion:
+    positive_prefix: fusion_positive
+    negative_prefix: fusion_negative
+  contrastive:
+    fst_embeddings_prefix: contrastive_fst_embeddings
+    snd_embeddings_prefix: contrastive_snd_embeddings

@@ -105,9 +105,6 @@ def run_train(cfg):
             + 1,  # in order to include `max_sequence_length` value
             embedding_dim=_embedding_dim,
         )
-        del config["model"]["initializer_range"]
-        del config["model"]["num_hops"]
-        del config["model"]["eta"]
         model = SequentialEncoder(
             **config["model"],
             position_embeddings=position_embeddings,
