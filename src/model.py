@@ -281,8 +281,8 @@ class MRGSRecModel(nn.Module):
             mask
         ]  # (all_batch_events, embedding_dim)
 
-        # TODO: test with original and tune L_c coef
         sequence_scores = all_sample_sequence_embeddings @ all_final_item_embeddings.T
+
         # (all_batch_events, num_items + 2)
 
         (

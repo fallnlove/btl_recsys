@@ -117,7 +117,7 @@ def main(
     validation.to_csv(validation_path, index=False)
     test.to_csv(test_path, index=False)
 
-    print(f"\nSplit complete!")
+    print("\nSplit complete!")
     print(f"Train: {len(train)} interactions, {train[user_col].nunique()} users")
     print(
         f"Val: {len(validation)} interactions, {validation[user_col].nunique()} users"
@@ -161,14 +161,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--train_quantile",
         type=float,
-        default=0.8,
+        default=0.96,
         help="Quantile for train/test split (default: 0.8)",
     )
 
     parser.add_argument(
         "--validation_type",
         type=str,
-        default="last",
+        default="by_time",
         choices=["by_user", "by_time", "last"],
         help="Method to create validation set from train (default: last)",
     )
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_quantile",
         type=float,
-        default=0.9,
+        default=0.98,
         help="Quantile for validation split when using by_time method (default: 0.9)",
     )
 
