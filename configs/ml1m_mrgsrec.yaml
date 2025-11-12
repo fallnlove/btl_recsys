@@ -1,0 +1,54 @@
+defaults:
+  - dataloader
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${model_name}__${dataset.name}__${now:%H-%M-%S}
+
+dataset:
+  path_to_data_dir: data
+  name: ml1m_098_096
+  max_sequence_length: 10
+
+model:
+  # optuna params
+  embedding_dim: 128
+  num_heads: 1
+  num_layers: 1
+  dim_feedforward: 128
+  dropout: 0.4
+  num_hops: 1
+  eta: 0.5657522461471146
+  # other params
+  activation: gelu
+  layer_norm_eps: 1.0e-09
+  initializer_range: 0.02
+
+optimizer:
+  optimizer:
+    type: adam
+    lr: 0.0023248485996299
+  clip_grad_threshold: 10.0
+
+device: "cuda"
+num_epochs: 100
+early_stopping_rounds: 20
+
+loss:
+  local:
+    predictions_prefix: local_prediction
+    labels_prefix: positive
+  global:
+    positive_prefix: global_positive
+    negative_prefix: global_negative
+  fusion:
+    positive_prefix: fusion_positive
+    negative_prefix: fusion_negative
+  contrastive:
+    fst_embeddings_prefix: contrastive_fst_embeddings
+    snd_embeddings_prefix: contrastive_snd_embeddings
+  local_coef: 0.8600577978163476
+  global_coef: 0.2810029625903459
+  fusion_coef: 0.4654652335776962
+  contrastive_coef: 0.0373285026686398
+model_name: mrgsrec

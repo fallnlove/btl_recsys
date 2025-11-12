@@ -29,3 +29,4 @@ optimizer:
 device: "cuda"
 num_epochs: 100
 early_stopping_rounds: 20
+model_name: mrgsrec
