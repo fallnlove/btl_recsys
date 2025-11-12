@@ -45,6 +45,8 @@ def main(cfg):
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     with open(output_dir / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
+    with open(output_dir / "all_metrics.json", "w") as f:
+        json.dump(all_metrics_list, f, indent=2)
     save_metrics(all_metrics_list, output_dir)
 
 
