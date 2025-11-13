@@ -161,7 +161,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--train_quantile",
         type=float,
-        default=0.96,
+        default=0.8,
         help="Quantile for train/test split (default: 0.8)",
     )
 
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_quantile",
         type=float,
-        default=0.98,
+        default=0.9,
         help="Quantile for validation split when using by_time method (default: 0.9)",
     )
 
