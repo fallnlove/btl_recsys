@@ -218,3 +218,4 @@ optuna_outputs/*
 *.gz
 new_data
 results
+*.old
