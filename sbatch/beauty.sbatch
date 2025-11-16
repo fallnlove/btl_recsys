@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=8
-#SBATCH --array=1-8
+#SBATCH --array=1-4
 
 module load Python
 module load gnu14

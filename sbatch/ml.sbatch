@@ -7,10 +7,10 @@
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=8
-#SBATCH --array=1-8
+#SBATCH --array=1-4
 
 module load Python
 module load gnu14
 conda activate mrgsrec
 
-python run_optuna.py --config_path configs/default.yaml --num_trials 10000 --exp_name ml --model_name mrgsrec --parallel_mode --dataset_name ml1m
+python run_optuna.py --config_name default --num_trials 10000 --exp_name ml --model_name sasrec --parallel_mode --dataset_name ml1m
