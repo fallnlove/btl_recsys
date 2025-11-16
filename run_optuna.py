@@ -32,12 +32,14 @@ def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
 
     if cfg.model_name == "mrgsrec":
         cfg.model.num_hops = trial.suggest_categorical("num_hops", [1, 2, 3])
-        cfg.model.eta = trial.suggest_float("eta", 0.5, 1.0)
+        cfg.model.eta = trial.suggest_float("eta", 0.5, 1.0, step=0.1)
 
-        cfg.loss.local_coef = trial.suggest_float("local_coef", 0.0, 1.0)
-        cfg.loss.global_coef = trial.suggest_float("global_coef", 0.0, 1.0)
-        cfg.loss.fusion_coef = trial.suggest_float("fusion_coef", 0.0, 1.0)
-        cfg.loss.contrastive_coef = trial.suggest_float("contrastive_coef", 0.0, 1.0)
+        cfg.loss.local_coef = trial.suggest_float("local_coef", 0.0, 1.0, step=0.25)
+        cfg.loss.global_coef = trial.suggest_float("global_coef", 0.0, 1.0, step=0.25)
+        cfg.loss.fusion_coef = trial.suggest_float("fusion_coef", 0.0, 1.0, step=0.25)
+        cfg.loss.contrastive_coef = trial.suggest_float(
+            "contrastive_coef", 0.0, 1.0, step=0.25
+        )
 
     logger.info(f"Trial params: {trial.params}")
 
