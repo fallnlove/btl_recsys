@@ -13,4 +13,4 @@ module load Python
 module load gnu14
 conda activate mrgsrec
 
-python run_optuna.py --config_name default --num_trials 10000 --exp_name ml --model_name sasrec --parallel_mode --dataset_name ml1m
+python run_optuna.py --config_name ml1m_mrgsrec --num_trials 10000 --exp_name ml1m_mrgsrec --model_name mrgsrec --parallel_mode --dataset_name ml1m

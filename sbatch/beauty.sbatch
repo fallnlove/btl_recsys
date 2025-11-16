@@ -13,4 +13,4 @@ module load Python
 module load gnu14
 conda activate mrgsrec
 
-python run_optuna.py --config_path configs/default.yaml --num_trials 10000 --exp_name beauty --model_name sasrec --parallel_mode --dataset_name reviews_Beauty_5
+python run_optuna.py --config_name beauty_mrgsrec --num_trials 10000 --exp_name beauty_mrgsrec --model_name mrgsrec --parallel_mode --dataset_name reviews_Beauty_5
