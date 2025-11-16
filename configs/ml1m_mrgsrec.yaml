@@ -12,15 +12,16 @@ dataset:
   max_sequence_length: 10
 
 model:
-  # optuna params
+  # optuna
   embedding_dim: 64
   num_heads: 2
   num_layers: 3
   dim_feedforward: 128
   dropout: 0.2
+  # mrgsrec
   num_hops: 1
   eta: 0.5657522461471146
-  # other params
+  # other
   activation: gelu
   layer_norm_eps: 1.0e-09
   initializer_range: 0.02
@@ -29,7 +30,6 @@ optimizer:
   optimizer:
     type: adam
     lr: 0.0025367616568376
-  clip_grad_threshold: 10.0
 
 device: "cuda"
 num_epochs: 100

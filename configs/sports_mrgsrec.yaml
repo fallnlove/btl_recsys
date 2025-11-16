@@ -12,7 +12,7 @@ dataset:
   max_sequence_length: 10
 
 model:
-  # optuna
+  # sasrec
   embedding_dim: 16
   num_heads: 1
   num_layers: 3
