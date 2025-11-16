@@ -12,11 +12,13 @@ dataset:
   max_sequence_length: 10
 
 model:
+  # sasrec
   embedding_dim: 128
   num_heads: 1
   num_layers: 4
   dim_feedforward: 128
   dropout: 0.4
+  # other
   activation: gelu
   layer_norm_eps: 1.0e-09
 
