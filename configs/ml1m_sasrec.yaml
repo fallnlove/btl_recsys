@@ -8,22 +8,22 @@ hydra:
 
 dataset:
   path_to_data_dir: data
-  name: ml1m_098_096
+  name: ml1m
   max_sequence_length: 10
 
 model:
   embedding_dim: 64
-  num_heads: 4
-  num_layers: 4
+  num_heads: 2
+  num_layers: 3
   dim_feedforward: 128
-  dropout: 0.1
+  dropout: 0.2
   activation: gelu
   layer_norm_eps: 1.0e-09
 
 optimizer:
   optimizer:
     type: adam
-    lr: 0.0028403070522863
+    lr: 0.0025367616568376
 
 device: "cuda"
 num_epochs: 100

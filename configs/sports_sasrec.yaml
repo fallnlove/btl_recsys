@@ -8,13 +8,13 @@ hydra:
 
 dataset:
   path_to_data_dir: data
-  name: reviews_Sports_and_Outdoors_5_098_096
+  name: reviews_Sports_and_Outdoors_5
   max_sequence_length: 10
 
 model:
-  embedding_dim: 64
+  embedding_dim: 16
   num_heads: 1
-  num_layers: 2
+  num_layers: 3
   dim_feedforward: 256
   dropout: 0.3
   activation: gelu
@@ -23,7 +23,7 @@ model:
 optimizer:
   optimizer:
     type: adam
-    lr: 0.0029995913661422
+    lr: 0.0028502259006634
   clip_grad_threshold: 10.0
 
 device: "cuda"
