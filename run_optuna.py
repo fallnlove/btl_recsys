@@ -100,7 +100,7 @@ def main(config_name, num_trials, exp_name, model_name, parallel_mode, dataset_n
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(),
+        sampler=optuna.samplers.TPESampler(n_startup_trials=100),
         study_name=exp_name,
         storage=JournalStorage(
             JournalFileBackend(file_path=str(outdir / f"./{exp_name}.log"))
