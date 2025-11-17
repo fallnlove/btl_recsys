@@ -1,0 +1,3 @@
+device: "cuda"
+num_epochs: 200
+early_stopping_rounds: 50

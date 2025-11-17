@@ -1,6 +1,7 @@
 defaults:
   - dataloader
   - loss
+  - general
 
 hydra:
   run:
@@ -31,13 +32,10 @@ optimizer:
     type: adam
     lr: 0.0025367616568376
 
-device: "cuda"
-num_epochs: 100
-early_stopping_rounds: 20
-
 loss:
   local_coef: 0.8600577978163476
   global_coef: 0.2810029625903459
   fusion_coef: 0.4654652335776962
   contrastive_coef: 0.0373285026686398
+
 model_name: mrgsrec

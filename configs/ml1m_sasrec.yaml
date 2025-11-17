@@ -1,6 +1,7 @@
 defaults:
   - dataloader
   - loss
+  - general
 
 hydra:
   run:
@@ -25,7 +26,4 @@ optimizer:
     type: adam
     lr: 0.0025367616568376
 
-device: "cuda"
-num_epochs: 100
-early_stopping_rounds: 20
 model_name: sasrec

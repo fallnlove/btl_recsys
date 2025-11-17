@@ -1,6 +1,7 @@
 defaults:
   - dataloader
   - loss
+  - general
 
 hydra:
   run:
@@ -31,10 +32,6 @@ optimizer:
     type: adam
     lr: 0.0014002963516611
   clip_grad_threshold: 10.0
-
-device: "cuda"
-num_epochs: 100
-early_stopping_rounds: 20
 
 loss:
   local_coef: 0.6745027729685843
