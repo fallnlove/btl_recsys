@@ -219,3 +219,4 @@ optuna_outputs/*
 new_data
 results
 *.old
+.python-version
