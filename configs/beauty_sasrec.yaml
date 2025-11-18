@@ -1,0 +1,32 @@
+defaults:
+  - dataloader
+  - loss
+  - general
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${model_name}__${dataset.name}__${now:%H-%M-%S}
+
+dataset:
+  path_to_data_dir: data
+  name: reviews_Beauty_5
+  max_sequence_length: 10
+
+model:
+  # sasrec
+  embedding_dim: 128
+  num_heads: 1
+  num_layers: 4
+  dim_feedforward: 128
+  dropout: 0.4
+  # other
+  activation: gelu
+  layer_norm_eps: 1.0e-09
+
+optimizer:
+  optimizer:
+    type: adam
+    lr: 0.0014002963516611
+  clip_grad_threshold: 10.0
+
+model_name: sasrec

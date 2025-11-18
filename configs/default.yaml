@@ -1,0 +1,28 @@
+defaults:
+  - dataloader
+  - loss
+
+dataset:
+  path_to_data_dir: data
+  name: reviews_Beauty_5
+  max_sequence_length: 10
+  samplers: {}
+
+model:
+  embedding_dim: 64
+  num_heads: 1
+  num_layers: 2
+  dim_feedforward: 64
+  dropout: 0.3
+  activation: gelu
+  layer_norm_eps: 1.0e-09
+
+optimizer:
+  optimizer:
+    type: adam
+    lr: 0.001
+  clip_grad_threshold: 10.0
+
+device: "cuda"
+num_epochs: 200
+early_stopping_rounds: 50

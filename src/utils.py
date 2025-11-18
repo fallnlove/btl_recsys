@@ -1,25 +1,17 @@
 import argparse
-import inspect
 import json
 import logging
 import random
+import time
+from collections import defaultdict
 
 import numpy as np
 import torch
+from tqdm import tqdm
+from matplotlib import pyplot as plt
+from pathlib import Path
 
-DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-# DEVICE = torch.device('cpu')
-
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--params", required=True)
-    args = parser.parse_args()
-
-    with open(args.params) as f:
-        params = json.load(f)
-
-    return params
+from .metrics import CoverageMetric
 
 
 def create_logger(
@@ -33,6 +25,49 @@ def create_logger(
     return logger
 
 
+logger = create_logger(name=__name__)
+
+
+def move_batch(batch, device):
+    for key, value in batch.items():
+        batch[key] = value.to(device)
+
+
+class BasicBatchProcessor:
+    def __call__(self, batch):
+        processed_batch = {}
+
+        for key in batch[0].keys():
+            if key.endswith(".ids"):
+                prefix = key.split(".")[0]
+                assert "{}.length".format(prefix) in batch[0]
+
+                processed_batch[f"{prefix}.ids"] = []
+                processed_batch[f"{prefix}.length"] = []
+
+                for sample in batch:
+                    processed_batch[f"{prefix}.ids"].extend(sample[f"{prefix}.ids"])
+                    processed_batch[f"{prefix}.length"].append(
+                        sample[f"{prefix}.length"]
+                    )
+
+        for part, values in processed_batch.items():
+            processed_batch[part] = torch.tensor(values, dtype=torch.long)
+
+        return processed_batch
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--params", required=True)
+    args = parser.parse_args()
+
+    with open(args.params) as f:
+        params = json.load(f)
+
+    return params
+
+
 def fix_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -40,7 +75,7 @@ def fix_random_seed(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def create_masked_tensor(data, lengths):
+def create_masked_tensor(data, lengths, device):
     batch_size = lengths.shape[0]
     max_sequence_length = lengths.max().item()
 
@@ -49,11 +84,11 @@ def create_masked_tensor(data, lengths):
         max_sequence_length,
         data.shape[-1],
         dtype=torch.float,
-        device=DEVICE,
+        device=device,
     )  # (batch_size, max_seq_len, emb_dim)
 
     mask = (
-        torch.arange(end=max_sequence_length, device=DEVICE)[None].tile([batch_size, 1])
+        torch.arange(end=max_sequence_length, device=device)[None].tile([batch_size, 1])
         < lengths[:, None]
     )  # (batch_size, max_seq_len)
 
@@ -90,71 +125,136 @@ def get_activation_function(name, **kwargs):
         raise ValueError("Unknown activation function name `{}`".format(name))
 
 
-class MetaParent(type):
+def inference(dataloader, model, metrics, device):
+    running_metrics = {}
+    for metric_name, metric_function in metrics.items():
+        running_metrics[metric_name] = []
 
-    def __init__(cls, name, base, params, **kwargs):
-        super().__init__(name, base, params)
-        is_base_class = cls.mro()[1] is object
-        if is_base_class:
-            base_class = cls
-        else:
-            base_class_found = False
-            for key in cls.mro():
-                if isinstance(key, MetaParent) and key.mro()[1] is object:
-                    assert base_class_found is False, "multiple base classes(bug)"
-                    base_class = key
-                    base_class_found = True
-            assert base_class_found is True, f"no base class for {name}"
+    model.eval()
 
-        if is_base_class:
-            cls._subclasses = {}
+    with torch.no_grad():
+        for idx, batch in enumerate(dataloader):
+            for key, value in batch.items():
+                batch[key] = value.to(device)
+            batch["logits"] = model(batch)
 
-        @classmethod
-        def __init_subclass__(scls, config_name=None):
-            super().__init_subclass__()
-            if config_name is not None:
-                if config_name in base_class._subclasses:
-                    raise ValueError(
-                        "Class with name `{}` is already registered".format(config_name)
-                    )
-                scls.config_name = config_name
-                base_class._subclasses[config_name] = scls
+            for key, values in batch.items():
+                batch[key] = values.cpu()
 
-        cls.__init_subclass__ = __init_subclass__
+            for metric_name, metric_function in metrics.items():
+                running_metrics[metric_name].extend(metric_function(inputs=batch))
 
-        @classmethod
-        def parent_create_from_config(cls, config, **kwargs):
-            if "type" in config:
-                return cls._subclasses[config["type"]].create_from_config(
-                    config, **kwargs
-                )
-            else:
-                raise ValueError(
-                    "There is no `type` provided for the `{}` class".format(name)
+        for metric_name, metric_function in metrics.items():
+            if isinstance(metric_function, CoverageMetric):
+                running_metrics[metric_name] = metric_function.reduce(
+                    running_metrics[metric_name]
                 )
 
-        # Take kwargs for the last initialized baseclass
-        init_kwargs = {}
-        for bcls in cls.mro()[:-1]:  # Look into all base classes except object
-            if "__init__" not in bcls.__dict__:
-                continue
-            init_kwargs = inspect.signature(bcls.__init__).parameters
+    print("Inference procedure has been finished!")
+    print("Metrics are the following:")
+    results = {}
+    for metric_name, metric_value in running_metrics.items():
+        results[metric_name] = np.mean(metric_value)
+        print("{}: {}".format(metric_name, np.mean(metric_value)))
+    print("Metrics finished!")
+    model.train()
+    return results
+
+
+def train(
+    dataloader,
+    model,
+    optimizer,
+    loss_function,
+    num_epochs,
+    early_stopping_rounds,
+    device,
+    best_metric=None,
+    inference_dict_validation=None,
+    inference_dict_test=None,
+):
+    logger.debug("Start training...")
+    train_start = time.time()
+    best_val_metric = 0.0
+    best_epoch = 0
+    best_metrics = {}
+    all_metrics_list = []
+    for epoch_num in range(num_epochs):
+        logger.debug(f"Start epoch {epoch_num}")
+        for step, batch in tqdm(
+            enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch_num}"
+        ):
+            model.train()
+            move_batch(batch, device)
+            batch.update(model(batch))
+            loss = loss_function(batch)
+            optimizer.step(loss)
+        print("VAL")
+        val_metrics = inference(**inference_dict_validation)
+        print("TEST")
+        test_metrics = inference(**inference_dict_test)
+
+        all_metrics = {
+            f"val/{metric_name}": metric_value
+            for metric_name, metric_value in val_metrics.items()
+        }
+        all_metrics |= {
+            f"test/{metric_name}": metric_value
+            for metric_name, metric_value in test_metrics.items()
+        }
+
+        all_metrics_list.append(all_metrics)
+
+        val_ndcg = val_metrics["ndcg@10"]
+        if val_ndcg > best_val_metric:
+            best_metrics = all_metrics
+            best_val_metric = val_ndcg
+            best_epoch = epoch_num
+        elif epoch_num - best_epoch > early_stopping_rounds:
+            print(f"no more improve in {early_stopping_rounds} epoch")
             break
 
-        @classmethod
-        def child_create_from_config(cls, config, **kwargs):
-            kwargs = {}
-            for key, argspec in init_kwargs.items():
-                if key == "self":
-                    continue
-                value = config.get(key, argspec.default)
-                if value is inspect.Parameter.empty:
-                    msg = "There is no value for `{}.__init__` required field `{}` in config `{}`"
-                    raise ValueError(msg.format(cls, key, config))
-                kwargs[key] = value
-            return cls(**kwargs)
+    train_end = time.time()
+    print("Total time:", train_end - train_start)
+    return all_metrics_list, best_metrics
 
-        if "create_from_config" not in cls.__dict__:
-            cls.create_from_config = (
-                parent_create_from_config if is_base_class else child_create_from_config
-            )
+
+def save_metrics(all_metrics: list[dict], output_dir: str | Path):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    metrics_per_split = defaultdict(lambda: defaultdict(list))
+
+    for epoch_metrics in all_metrics:
+        for key, value in epoch_metrics.items():
+            split, metric_name = key.split("/", 1)
+            metrics_per_split[split][metric_name].append(value)
+
+    metric_names = sorted(
+        {name for split in metrics_per_split.values() for name in split}
+    )
+
+    def plot_metric(metric_name):
+        plt.figure(figsize=(6, 4))
+        for split, metrics in metrics_per_split.items():
+            if metric_name in metrics:
+                plt.plot(
+                    range(1, len(metrics[metric_name]) + 1),
+                    metrics[metric_name],
+                    marker="o",
+                    label=split,
+                )
+        plt.title(metric_name)
+        plt.xlabel("Epoch")
+        plt.ylabel(metric_name)
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        save_path = output_dir / f"{metric_name.replace('@', '_at_')}.png"
+        plt.savefig(save_path, dpi=200)
+        plt.close()
+
+    for name in metric_names:
+        plot_metric(name)
+
+    print(f"✅ Saved {len(metric_names) + 1} plots to {output_dir.resolve()}")

@@ -1,5 +1,6 @@
-from omegaconf import OmegaConf
 import json
+
+from omegaconf import OmegaConf
 
 
 def cast_config(config_name):

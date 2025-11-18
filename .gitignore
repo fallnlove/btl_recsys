@@ -207,10 +207,15 @@ marimo/_lsp/
 __marimo__/
 
 # my
-data2/*
-!data2/.gitkeep
+data/*
+!data/.gitkeep
 raw_data/*
+!raw_data/.gitkeep
 outputs/*
 !outputs/.gitkeep
 optuna_outputs/*
 !optuna_outputs/.gitkeep
+*.gz
+new_data
+results
+*.old

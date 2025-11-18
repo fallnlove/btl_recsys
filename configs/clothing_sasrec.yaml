@@ -1,0 +1,30 @@
+defaults:
+  - dataloader
+  - loss
+  - general
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${model_name}__${dataset.name}__${now:%H-%M-%S}
+
+dataset:
+  path_to_data_dir: data
+  name: reviews_Clothing_Shoes_and_Jewelry_5
+  max_sequence_length: 10
+
+model:
+  embedding_dim: 16
+  num_heads: 1
+  num_layers: 1
+  dim_feedforward: 64
+  dropout: 0.4
+  activation: gelu
+  layer_norm_eps: 1.0e-09
+
+optimizer:
+  optimizer:
+    type: adam
+    lr: 0.0028696855019972
+  clip_grad_threshold: 10.0
+
+model_name: sasrec

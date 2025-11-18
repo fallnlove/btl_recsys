@@ -1,19 +1,16 @@
 import torch
 
-from .utils import MetaParent
 
-
-class BaseMetric(metaclass=MetaParent):
+class BaseMetric:
     pass
 
 
 class StatefullMetric(BaseMetric):
-
     def reduce(self):
         raise NotImplementedError
 
 
-class StaticMetric(BaseMetric, config_name="dummy"):
+class StaticMetric:
     def __init__(self, name, value):
         self._name = name
         self._value = value
@@ -24,8 +21,7 @@ class StaticMetric(BaseMetric, config_name="dummy"):
         return inputs
 
 
-class CompositeMetric(BaseMetric, config_name="composite"):
-
+class CompositeMetric:
     def __init__(self, metrics):
         self._metrics = metrics
 
@@ -41,16 +37,15 @@ class CompositeMetric(BaseMetric, config_name="composite"):
         return inputs
 
 
-class NDCGMetric(BaseMetric, config_name="ndcg"):
-
+class NDCGMetric:
     def __init__(self, k):
         self._k = k
 
-    def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix][
+    def __call__(self, inputs):
+        predictions = inputs["logits"][
             :, : self._k
         ].float()  # (batch_size, top_k_indices)
-        labels = inputs["{}.ids".format(labels_prefix)].float()  # (batch_size)
+        labels = inputs["labels.ids"].float()  # (batch_size)
 
         assert labels.shape[0] == predictions.shape[0]
 
@@ -62,21 +57,20 @@ class NDCGMetric(BaseMetric, config_name="ndcg"):
         ).to(
             hits.device
         )  # (k)
-        dcg = torch.einsum("bk,k->b", hits, discount_factor)  # (batch_size)
+        dcg = hits @ discount_factor  # (batch_size)
 
         return dcg.cpu().tolist()
 
 
-class RecallMetric(BaseMetric, config_name="recall"):
-
+class RecallMetric:
     def __init__(self, k):
         self._k = k
 
-    def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix][
+    def __call__(self, inputs):
+        predictions = inputs["logits"][
             :, : self._k
         ].float()  # (batch_size, top_k_indices)
-        labels = inputs["{}.ids".format(labels_prefix)].float()  # (batch_size)
+        labels = inputs["labels.ids"].float()  # (batch_size)
 
         assert labels.shape[0] == predictions.shape[0]
 
@@ -88,8 +82,7 @@ class RecallMetric(BaseMetric, config_name="recall"):
         return recall.cpu().tolist()
 
 
-class CoverageMetric(StatefullMetric, config_name="coverage"):
-
+class CoverageMetric:
     def __init__(self, k, num_items):
         self._k = k
         self._num_items = num_items
@@ -98,8 +91,8 @@ class CoverageMetric(StatefullMetric, config_name="coverage"):
     def create_from_config(cls, config, **kwargs):
         return cls(k=config["k"], num_items=kwargs["num_items"])
 
-    def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix][
+    def __call__(self, inputs):
+        predictions = inputs["logits"][
             :, : self._k
         ].float()  # (batch_size, top_k_indices)
         return predictions.view(-1).long().cpu().detach().tolist()  # (batch_size * k)

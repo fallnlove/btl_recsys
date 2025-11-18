@@ -1,0 +1,42 @@
+defaults:
+  - dataloader
+  - loss
+  - general
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${model_name}__${dataset.name}__${now:%H-%M-%S}
+
+dataset:
+  path_to_data_dir: data
+  name: reviews_Sports_and_Outdoors_5
+  max_sequence_length: 10
+
+model:
+  # sasrec
+  embedding_dim: 16
+  num_heads: 1
+  num_layers: 3
+  dim_feedforward: 256
+  dropout: 0.3
+  # mrgsrec
+  num_hops: 1
+  eta: 0.7066136821518646
+  # other
+  activation: gelu
+  layer_norm_eps: 1.0e-09
+  initializer_range: 0.02
+
+optimizer:
+  optimizer:
+    type: adam
+    lr: 0.0028502259006634
+  clip_grad_threshold: 10.0
+
+loss:
+  local_coef: 0.6879986520738628
+  global_coef: 0.96641100196657
+  fusion_coef: 0.1903733825511383
+  contrastive_coef: 0.1023015231887275
+
+model_name: mrgsrec
