@@ -31,6 +31,7 @@ class MRGSRecModel(nn.Module):
         self._initializer_range = cfg["initializer_range"]
         self._num_hops = cfg["num_hops"]
         self._eta = cfg["eta"]
+        self._topk_k = cfg["topk_k"]
         # layers
         self._graph_encoder = GraphEncoder(
             graph, self._dropout, num_users, num_items, self._num_hops
@@ -252,8 +253,8 @@ class MRGSRecModel(nn.Module):
         candidate_scores[:, self._num_items + 1 :] = -torch.inf
 
         _, indices = torch.topk(
-            candidate_scores, k=20, dim=-1, largest=True
-        )  # (batch_size, 20)
+            candidate_scores, k=self._topk_k, dim=-1, largest=True
+        )  # (batch_size, _topk_k)
 
         return indices
 
