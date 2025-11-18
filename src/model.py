@@ -65,6 +65,7 @@ class MRGSRecModel(nn.Module):
             self._layer_norm_eps,
             self._num_layers,
             self._num_items,
+            self._topk_k,
             self._position_embeddings,
             self._item_embeddings,
         )
