@@ -15,10 +15,12 @@ class SequentialEncoder(nn.Module):
         layer_norm_eps,
         num_layers,
         num_items,
+        topk_k,
         position_embeddings,
         item_embeddings,
     ):
         super().__init__()
+        self._topk_k = topk_k
         self._num_items = num_items
         transformer_encoder_layer = nn.TransformerEncoderLayer(
             d_model=embedding_dim,
@@ -197,7 +199,7 @@ class SequentialEncoder(nn.Module):
             candidate_scores[:, self._num_items + 1 :] = -torch.inf  # Mask id
 
             _, indices = torch.topk(
-                candidate_scores, k=20, dim=-1, largest=True
-            )  # (batch_size, 20)
+                candidate_scores, k=self._topk_k, dim=-1, largest=True
+            )  # (batch_size, _topk_k)
 
             return indices
