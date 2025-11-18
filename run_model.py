@@ -55,7 +55,7 @@ def run_train(cfg):
     assert model_name in ["sasrec", "mrgsrec"]
     fix_random_seed(seed_val)
     config = OmegaConf.to_container(cfg, resolve=True)
-
+    config["model"]["topk_k"] = max(config["metrics_ks"])
     device = config["device"]
 
     logger.info(f"Training config:\n{OmegaConf.to_yaml(config)}\n")
@@ -142,11 +142,14 @@ def run_train(cfg):
 
     logger.debug("Everything is ready for training process!")
 
-    metrics = {
-        "ndcg@10": NDCGMetric(10),
-        "coverage@10": CoverageMetric(10, dataset_meta["num_items"]),
-        "recall@10": RecallMetric(10),
-    }
+    metrics = {}
+
+    for k in config["metrics_ks"]:
+        metrics |= {
+            f"ndcg@{k}": NDCGMetric(k),
+            f"coverage@{k}": CoverageMetric(k, dataset_meta["num_items"]),
+            f"recall@{k}": RecallMetric(k),
+        }
 
     inference_dict_validation = dict(
         dataloader=validation_dataloader,

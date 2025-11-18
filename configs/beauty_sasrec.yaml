@@ -22,6 +22,7 @@ model:
   # other
   activation: gelu
   layer_norm_eps: 1.0e-09
+  topk_k: null
 
 optimizer:
   optimizer:
