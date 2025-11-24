@@ -171,4 +171,4 @@ class ILDMetric:
 
         ild_per_user = pairwise.mean(dim=1)  # (B,)
 
-        return ild_per_user
+        return ild_per_user.tolist()
