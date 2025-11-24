@@ -138,3 +138,37 @@ class NoveltyMetric(StatefullMetric):
             return 0.0
 
         return sum(novelty_values) / len(novelty_values)
+
+
+class ILDMetric:
+    """
+    Vectorized ILD:
+    ILD(u) = mean over i<j of dist(item_i, item_j)
+    """
+
+    def __init__(self, k, dist_matrix):
+        self._k = k
+        self._dist = dist_matrix  # (num_items, num_items)
+        self._triu = torch.triu_indices(k, k, offset=1)  # (2, K(K - 1)/2)
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            k=config["k"],
+            dist_matrix=kwargs["dist_matrix"],
+        )
+
+    def __call__(self, inputs):
+        """
+        inputs["logits"]: (B, K) item ids
+        Returns: tensor (B,) — ILD per user
+        """
+        topk = inputs["logits"][:, : self._k]  # (B, K)
+
+        sub = self._dist[topk[:, None], topk[:, :, None]]  # (B, (K, K))
+
+        pairwise = sub[:, self._triu[0], self._triu[1]]  # (B, K(K - 1)/2)
+
+        ild_per_user = pairwise.mean(dim=1)  # (B,)
+
+        return ild_per_user

@@ -10,12 +10,24 @@ from torch.utils.data import DataLoader
 
 from src.dataset import SequenceDataset, build_graph
 from src.loss import LocalObjective, MRGSRecLoss
-from src.metrics import CoverageMetric, NDCGMetric, NoveltyMetric, RecallMetric
+from src.metrics import (
+    CoverageMetric,
+    ILDMetric,
+    NDCGMetric,
+    NoveltyMetric,
+    RecallMetric,
+)
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
 from src.sequence import SequentialEncoder
-from src.utils import (BasicBatchProcessor, create_logger, fix_random_seed,
-                       save_metrics, train)
+from src.utils import (
+    BasicBatchProcessor,
+    compute_item_distance_matrix,
+    create_logger,
+    fix_random_seed,
+    save_metrics,
+    train,
+)
 
 logger = create_logger(name=__name__)
 seed_val = 42
@@ -137,6 +149,9 @@ def run_train(cfg):
 
     logger.debug("Everything is ready for training process!")
 
+    item_distances = compute_item_distance_matrix(
+        all_data, dataset_meta["num_items"] + 2, dataset_meta["num_users"] + 2
+    )
     item2num_iteractions = all_data.groupby("item_id").count()["user_id"].to_dict()
     metrics = {}
     for k in config["metrics_ks"]:
@@ -147,6 +162,7 @@ def run_train(cfg):
             f"novelty@{k}": NoveltyMetric(
                 k, item2num_iteractions, dataset_meta["num_users"]
             ),
+            f"diversity@{k}": ILDMetric(k, item_distances),
         }
 
     inference_dict_validation = dict(

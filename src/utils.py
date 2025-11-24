@@ -261,3 +261,23 @@ def save_metrics(all_metrics: list[dict], output_dir: str | Path):
         plot_metric(name)
 
     print(f"✅ Saved {len(metric_names) + 1} plots to {output_dir.resolve()}")
+
+
+def compute_item_distance_matrix(df, num_items, num_users):
+    """
+    df must contain columns: item_id, user_id, rating (0/1 or rating)
+    Returns: (num_items × num_items) cosine distance matrix
+    """
+
+    mat = torch.zeros((num_items, num_users), dtype=torch.float32)
+    mat[df["item_id"], df["user_id"]] = torch.tensor(
+        df["rating"].values, dtype=torch.float32
+    )
+
+    mat = torch.nn.functional.normalize(mat, p=2, dim=1)  # (I × U)
+
+    sim = mat @ mat.T
+
+    dist = 1 - sim
+
+    return dist
