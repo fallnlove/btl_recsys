@@ -10,8 +10,11 @@ import torch
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from pathlib import Path
+import seaborn as sns
 
-from .metrics import CoverageMetric
+sns.set_theme()
+
+from .metrics import StatefullMetric
 
 
 def create_logger(
@@ -145,7 +148,7 @@ def inference(dataloader, model, metrics, device):
                 running_metrics[metric_name].extend(metric_function(inputs=batch))
 
         for metric_name, metric_function in metrics.items():
-            if isinstance(metric_function, CoverageMetric):
+            if isinstance(metric_function, StatefullMetric):
                 running_metrics[metric_name] = metric_function.reduce(
                     running_metrics[metric_name]
                 )

@@ -1,4 +1,5 @@
 import torch
+from collections import Counter
 
 
 class BaseMetric:
@@ -82,7 +83,7 @@ class RecallMetric:
         return recall.cpu().tolist()
 
 
-class CoverageMetric:
+class CoverageMetric(StatefullMetric):
     def __init__(self, k, num_items):
         self._k = k
         self._num_items = num_items
@@ -92,10 +93,47 @@ class CoverageMetric:
         return cls(k=config["k"], num_items=kwargs["num_items"])
 
     def __call__(self, inputs):
-        predictions = inputs["logits"][
-            :, : self._k
-        ].float()  # (batch_size, top_k_indices)
-        return predictions.view(-1).long().cpu().detach().tolist()  # (batch_size * k)
+        predictions = inputs["logits"][:, : self._k]  # (batch_size, top_k_indices)
+        return predictions.reshape(-1).cpu().detach().tolist()  # (batch_size * k)
 
     def reduce(self, values):
         return len(set(values)) / self._num_items
+
+
+class NoveltyMetric(StatefullMetric):
+    """
+    Novelty(i) = 1 - (#users recommended i) / (#users that have NOT interacted with i)
+    """
+
+    def __init__(self, k, item2num_iteractions, num_users):
+        self._k = k
+        self._item2num_iteractions = item2num_iteractions
+        self._num_users = num_users
+
+    def __call__(self, inputs):
+        predictions = inputs["logits"][:, : self._k]  # (batch_size, top_k_indices)
+        return predictions.reshape(-1).cpu().detach().tolist()  # (batch_size * k)
+
+    def reduce(self, recommended_items):
+        """
+        recommended_items: flat list of item ids for ALL users in epoch/batch
+        returns: average novelty over all items seen in recommendations
+        """
+
+        novelty_values = []
+        rec_count = Counter(recommended_items)
+
+        for item, recommended_times in rec_count.items():
+            # number of users who have NOT interacted with this item
+            no_interacted = self._num_users - self._item2num_iteractions[item]
+
+            if no_interacted == 0:
+                continue  # skip items impossible to recommend
+
+            novelty = 1.0 - (recommended_times / no_interacted)
+            novelty_values.append(novelty)
+
+        if len(novelty_values) == 0:
+            return 0.0
+
+        return sum(novelty_values) / len(novelty_values)

@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from src.dataset import SequenceDataset, build_graph
 from src.loss import LocalObjective, MRGSRecLoss
-from src.metrics import CoverageMetric, NDCGMetric, RecallMetric
+from src.metrics import CoverageMetric, NDCGMetric, RecallMetric, NoveltyMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
 from src.sequence import SequentialEncoder
@@ -142,13 +142,14 @@ def run_train(cfg):
 
     logger.debug("Everything is ready for training process!")
 
+    item2num_iteractions = all_data.groupby("item_id").count()["user_id"].to_dict()
     metrics = {}
-
     for k in config["metrics_ks"]:
         metrics |= {
             f"ndcg@{k}": NDCGMetric(k),
             f"coverage@{k}": CoverageMetric(k, dataset_meta["num_items"]),
             f"recall@{k}": RecallMetric(k),
+            f"novelty@{k}": NoveltyMetric(k, item2num_iteractions, dataset_meta["num_users"]), 
         }
 
     inference_dict_validation = dict(

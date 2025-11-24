@@ -10,3 +10,4 @@ optuna
 optuna-dashboard
 requests
 matplotlib
+seaborn
