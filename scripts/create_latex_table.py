@@ -1,6 +1,6 @@
-from pathlib import Path
 import json
 import pprint
+from pathlib import Path
 
 datasets_mapping = {
     "reviews_Beauty_5": "beauty",

@@ -1,26 +1,21 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 import hydra
-from hydra.core.hydra_config import HydraConfig
 import pandas as pd
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 from torch import nn
 from torch.utils.data import DataLoader
 
 from src.dataset import SequenceDataset, build_graph
 from src.loss import LocalObjective, MRGSRecLoss
-from src.metrics import CoverageMetric, NDCGMetric, RecallMetric, NoveltyMetric
+from src.metrics import CoverageMetric, NDCGMetric, NoveltyMetric, RecallMetric
 from src.model import MRGSRecModel
 from src.optimizer import BasicOptimizer
 from src.sequence import SequentialEncoder
-from src.utils import (
-    BasicBatchProcessor,
-    create_logger,
-    fix_random_seed,
-    train,
-    save_metrics,
-)
+from src.utils import (BasicBatchProcessor, create_logger, fix_random_seed,
+                       save_metrics, train)
 
 logger = create_logger(name=__name__)
 seed_val = 42
@@ -149,7 +144,9 @@ def run_train(cfg):
             f"ndcg@{k}": NDCGMetric(k),
             f"coverage@{k}": CoverageMetric(k, dataset_meta["num_items"]),
             f"recall@{k}": RecallMetric(k),
-            f"novelty@{k}": NoveltyMetric(k, item2num_iteractions, dataset_meta["num_users"]), 
+            f"novelty@{k}": NoveltyMetric(
+                k, item2num_iteractions, dataset_meta["num_users"]
+            ),
         }
 
     inference_dict_validation = dict(
