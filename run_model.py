@@ -30,7 +30,6 @@ from src.utils import (
 )
 
 logger = create_logger(name=__name__)
-seed_val = 42
 
 
 def unpack_dataset(dataset_config):
@@ -60,7 +59,7 @@ def main(cfg):
 def run_train(cfg):
     model_name = cfg["model_name"]
     assert model_name in ["sasrec", "mrgsrec"]
-    fix_random_seed(seed_val)
+    fix_random_seed(cfg.get("seed", 42))
     config = OmegaConf.to_container(cfg, resolve=True)
     config["model"]["topk_k"] = max(config["metrics_ks"])
     device = config["device"]
