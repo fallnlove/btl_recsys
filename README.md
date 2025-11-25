@@ -1,5 +1,30 @@
 # Multi-Representation Recommender Systems
 
+.
+└── RecSys-BTL/
+    ├── src/
+    │   ├── base.py
+    │   ├── model/
+    │   │   ├── sasrec.py
+    │   │   ├── ultra_gcn.py
+    │   │   ├── funk_svd.py
+    │   │   └── ...
+    │   ├── metrics/
+    │   │   ├── hitrate.py
+    │   │   ├── ndcg.py
+    │   │   ├── recall.py
+    │   │   └── coverage.py
+    │   └── datasets/
+    │       ├── sequential.py
+    │       └── non_sequential.py
+    ├── srcipts
+    ├── configs
+    ├── train.py
+    ├── train_optuna.py
+    ├── inference.py
+    ├── btl.py
+    └── ...
+
 ## Datasets
 
 #### Amazon
