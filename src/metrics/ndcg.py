@@ -9,4 +9,9 @@ class NDCGMetric(BaseMetric):
         self._k = k
 
     def __call__(self, predictions: np.ndarray, targets: np.ndarray) -> float:
-        raise NotImplementedError("NDCGMetric is not implemented yet.")
+        preds = predictions[:, :self._k]
+        hits = (preds == targets[:, None]).astype(float)
+        discount_factor = 1 / np.log2(np.arange(1, self._k + 1) + 1)
+        dcg = hits @ discount_factor
+
+        return float(np.mean(dcg))

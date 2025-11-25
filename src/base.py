@@ -1,3 +1,4 @@
+import optuna
 import numpy as np
 
 from abc import abstractmethod
@@ -45,6 +46,13 @@ class BaseModel:
     def load_checkpoint(self, path: str):
         """
         Load the model checkpoint from the specified path.
+        """
+        raise NotImplementedError("Subclasses should implement this method.")
+
+    @abstractmethod
+    def sample_params(self, trial: optuna.trial.Trial):
+        """
+        Sample hyperparameters for the model using the given trial.
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
