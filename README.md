@@ -1,5 +1,6 @@
 # Multi-Representation Recommender Systems
 
+```
 .
 └── RecSys-BTL/
     ├── src/
@@ -24,6 +25,7 @@
     ├── inference.py
     ├── btl.py
     └── ...
+```
 
 ## Datasets
 
