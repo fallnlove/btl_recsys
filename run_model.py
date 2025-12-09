@@ -45,12 +45,20 @@ def run_train(cfg, verbose: bool = True):
         instantiate(metric_cfg, n_items=train_dataset.n_items) for metric_cfg in cfg.metrics
     ])
 
-    logger.info(f"Start training...\n")
+    if verbose:
+        logger.info(f"Start training...\n")
     model.fit(train_dataset, val_dataset)
     predictions = model.predict(val_dataset, top_n=cfg.max_top_n)
 
     holdout_users = val_dataset.get_holdout_users()
-    return metrics(predictions[holdout_users,:], val_dataset.get_holdout_array()[holdout_users])
+    val_metrics = metrics(
+        predictions[holdout_users,:],
+        val_dataset.get_holdout_array()[holdout_users]
+    )
+    if verbose:
+        logger.info(f"Validation metrics: {json.dumps(val_metrics, indent=2)}\n")
+
+    return val_metrics
 
 if __name__ == "__main__":
     main()
