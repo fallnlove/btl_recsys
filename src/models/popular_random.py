@@ -18,7 +18,7 @@ class PopularRandom(BaseModel):
         """
 
         n_items = train_dataset.n_items
-        self.item_counts = np.zeros(n_items, dtype=np.long)
+        self.item_counts = np.zeros(n_items, dtype=np.int64)
         for user_id, item_id in zip(*train_dataset.get_coo_array().coords):
             self.item_counts[item_id] += 1
 
@@ -26,11 +26,11 @@ class PopularRandom(BaseModel):
         """
         Make predictions on the given data.
         """
-        predictions = np.zeros((dataset.n_users, top_n), dtype=np.long)
+        predictions = np.zeros((dataset.n_users, top_n), dtype=np.int64)
         dataloader = dataset.get_dataloader(batch_size=1, shuffle=False)
         for batch in dataloader:
             probs = np.copy(self.item_counts).astype(np.float32)
-            probs[batch['history'][0].numpy().astype(np.long).tolist()] = 0
+            probs[batch['history'][0].numpy().astype(np.int64).tolist()] = 0
             predictions[batch['user_id'].numpy()] = np.random.choice(
                 dataset.n_items,
                 size=(top_n, ),

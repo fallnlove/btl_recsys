@@ -31,13 +31,13 @@ class RecSysDataset(Dataset):
             self._df = self._df_val
             holdout_path = Path("data/global_split") / name / "holdout_validation.csv"
             self._holdout_df = pd.read_csv(holdout_path)
-            self._holdout = np.zeros(self.n_users, dtype=np.long)
+            self._holdout = np.zeros(self.n_users, dtype=np.int64)
             self._holdout[self._holdout_df['user_id'].values] = self._holdout_df['item_id'].values
         elif split == "test":
             self._df = self._df_test
             holdout_path = Path("data/global_split") / name / "holdout_test.csv"
             self._holdout_df = pd.read_csv(holdout_path)
-            self._holdout = np.zeros(self.n_users, dtype=np.long)
+            self._holdout = np.zeros(self.n_users, dtype=np.int64)
             self._holdout[self._holdout_df['user_id'].values] = self._holdout_df['item_id'].values
 
         self._users = self._df["user_id"].unique()
