@@ -1,28 +1,14 @@
 defaults:
-  - dataloader
-  - loss
+  - dataset: movielens
+  - model: popular_random
+  - metrics: base
+  - _self_
 
-dataset:
-  path_to_data_dir: data
-  name: reviews_Beauty_5
-  max_sequence_length: 10
-  samplers: {}
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${model.name}__${dataset.name}__${now:%H-%M-%S}
+  sweep:
+    dir: outputs/sweeps/${now:%Y-%m-%d}/${model.name}__${dataset.name}__${now:%H-%M-%S}
 
-model:
-  embedding_dim: 64
-  num_heads: 1
-  num_layers: 2
-  dim_feedforward: 64
-  dropout: 0.3
-  activation: gelu
-  layer_norm_eps: 1.0e-09
-
-optimizer:
-  optimizer:
-    type: adam
-    lr: 0.001
-  clip_grad_threshold: 10.0
-
-device: "cuda"
-num_epochs: 200
-early_stopping_rounds: 50
+seed: 42
+max_top_n: 20

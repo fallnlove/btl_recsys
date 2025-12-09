@@ -4,13 +4,6 @@ import numpy as np
 from abc import abstractmethod
 
 
-class BaseDataset:
-    """
-    Base class for all datasets.
-    """
-    pass
-
-
 class BaseModel:
     """
     Base class for all models.
@@ -19,19 +12,27 @@ class BaseModel:
         self.name = name
 
     def __str__(self):
-        return f"{self.__class__.__name__}(name={self.name})"
+        return self.name
 
     @abstractmethod
-    def fit(self, dataset: BaseDataset):
+    def fit(self, train_dataset, val_dataset):
         """
         Fit the model to the dataset.
         """
         raise NotImplementedError("Subclasses should implement this method.")
     
     @abstractmethod
-    def predict(self, dataset: BaseDataset, top_n: int) -> np.ndarray:
+    def predict(self, dataset, top_n: int) -> np.ndarray:
         """
         Make predictions on the given data.
+
+        Inputs:
+            dataset: The dataset to make predictions on.
+            top_n (int): The number of top items to recommend.
+        Returns:
+            np.ndarray: The predictions (shape: [n_users, top_n]).
+            Note: here n_users is the number of users in the whole dataset,
+            not only in the test split.
         """
         raise NotImplementedError("Subclasses should implement this method.")
     
@@ -49,8 +50,9 @@ class BaseModel:
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
+    @staticmethod
     @abstractmethod
-    def sample_params(self, trial: optuna.trial.Trial):
+    def sample_params(trial: optuna.trial.Trial):
         """
         Sample hyperparameters for the model using the given trial.
         """
@@ -63,6 +65,9 @@ class BaseMetric:
     """
     def __init__(self, name: str, *args, **kwargs):
         self.name = name
+
+    def __str__(self):
+        return self.name
 
     @abstractmethod
     def __call__(self, predictions: np.ndarray, targets: np.ndarray) -> float:

@@ -30,7 +30,7 @@ def main(filename):
     print(f"{ds_name=}")
     df = getDF(filename)
 
-    new_df = df[["reviewerID", "asin", "overall", "unixReviewTime"]].copy()
+    new_df = df[["user_id", "asin", "rating", "timestamp"]].copy()
     new_df.columns = ["user_id", "item_id", "rating", "timestamp"]
     new_df["rating"] = 1
 

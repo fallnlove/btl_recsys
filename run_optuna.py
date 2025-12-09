@@ -19,17 +19,6 @@ logger = create_logger(name=__name__)
 def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
     cfg = deepcopy(base_cfg)
 
-    # cfg.model.embedding_dim = trial.suggest_categorical(
-    #     "embedding_dim", [16, 32, 64, 128]
-    # )
-    # cfg.model.num_layers = trial.suggest_categorical("num_layers", [1, 2, 3, 4])
-    # cfg.model.num_heads = trial.suggest_categorical("num_heads", [1, 2, 4])
-    # cfg.model.dim_feedforward = trial.suggest_categorical(
-    #     "dim_feedforward", [32, 64, 128, 256]
-    # )
-    # cfg.model.dropout = trial.suggest_float("dropout", 0.0, 0.5, step=0.1)
-    # cfg.optimizer.optimizer.lr = trial.suggest_loguniform("lr", 1e-4, 3e-3)
-
     if cfg.model_name == "mrgsrec":
         cfg.model.num_hops = trial.suggest_categorical("num_hops", [1, 2, 3])
         cfg.model.eta = trial.suggest_float("eta", 0.5, 1.0, step=0.1)
@@ -95,9 +84,9 @@ def main(config_name, num_trials, exp_name, model_name, parallel_mode, dataset_n
 
     outdir = Path("optuna_outputs") / exp_name
     if parallel_mode:
-        outdir.mkdir(exist_ok=True)
+        outdir.mkdir(exist_ok=True, parents=True)
     else:
-        outdir.mkdir(exist_ok=False)
+        outdir.mkdir(exist_ok=False, parents=True)
     index_path = outdir / "index.csv"
 
     study = optuna.create_study(
@@ -113,11 +102,11 @@ def main(config_name, num_trials, exp_name, model_name, parallel_mode, dataset_n
     def objective_fn(trial: optuna.trial.Trial) -> float:
         cfg = update_cfg(base_cfg, trial)
 
-        _, metrics = run_train(cfg)
+        metrics = run_train(cfg, verbose=False)
 
         save_trial_results(outdir, trial.number, trial.params, metrics, index_path)
 
-        return metrics["val/ndcg@10"]
+        return metrics["ndcg@10"]
 
     study.optimize(objective_fn, n_trials=num_trials)
 
