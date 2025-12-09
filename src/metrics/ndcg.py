@@ -1,6 +1,7 @@
 import numpy as np
 
 from src import BaseMetric
+from src.utils.metric_utils import check_unique
 
 
 class NDCGMetric(BaseMetric):
@@ -9,6 +10,7 @@ class NDCGMetric(BaseMetric):
         self._k = k
 
     def __call__(self, predictions: np.ndarray, targets: np.ndarray) -> float:
+        assert check_unique(predictions), "Predicted items must be unique per user."
         preds = predictions[:, :self._k]
         hits = (preds == targets[:, None]).astype(float)
         discount_factor = 1 / np.log2(np.arange(1, self._k + 1) + 1)
