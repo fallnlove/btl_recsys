@@ -1,4 +1,0 @@
-device: "cuda"
-num_epochs: 200
-early_stopping_rounds: 50
-metrics_ks: [10, 100]
