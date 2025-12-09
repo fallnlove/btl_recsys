@@ -50,14 +50,6 @@ class BaseModel:
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
-    @staticmethod
-    @abstractmethod
-    def sample_params(trial: optuna.trial.Trial):
-        """
-        Sample hyperparameters for the model using the given trial.
-        """
-        raise NotImplementedError("Subclasses should implement this method.")
-
 
 class BaseMetric:
     """

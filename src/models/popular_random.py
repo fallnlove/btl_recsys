@@ -50,10 +50,3 @@ class PopularRandom(BaseModel):
         Load the model checkpoint from the specified path.
         """
         self.item_counts = np.load(path)
-
-    @staticmethod
-    def sample_params(trial: optuna.trial.Trial):
-        """
-        Sample hyperparameters for the model using the given trial.
-        """
-        pass
