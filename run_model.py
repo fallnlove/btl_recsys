@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import hydra
-import pandas as pd
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
@@ -49,12 +48,14 @@ def run_train(cfg, verbose: bool = True):
         logger.info(f"Start training...\n")
     model.fit(train_dataset, val_dataset)
     predictions = model.predict(val_dataset, top_n=cfg.max_top_n)
+    if verbose:
+        logger.info(f"Training completed.\n")
 
     holdout_users = val_dataset.get_holdout_users()
-    val_metrics = metrics(
+    val_metrics = {f"val/{k}": v for k, v in metrics(
         predictions[holdout_users,:],
         val_dataset.get_holdout_array()[holdout_users]
-    )
+    ).items()}
     if verbose:
         logger.info(f"Validation metrics: {json.dumps(val_metrics, indent=2)}\n")
 

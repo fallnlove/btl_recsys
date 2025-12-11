@@ -2,12 +2,9 @@ numpy
 scipy
 torch
 tqdm
-ipykernel
 pandas
 click
 hydra-core
 optuna
 optuna-dashboard
 requests
-matplotlib
-seaborn

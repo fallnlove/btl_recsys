@@ -1,2 +1,3 @@
 _target_: src.datasets.RecSysDataset
 name: ml1m
+url: https://disk.360.yandex.ru/d/tRgn_Ctv_Do57Q

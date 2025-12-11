@@ -14,18 +14,8 @@ def split_by_time(data, user_col, timestamp_col, quantile):
     data = data.reset_index(drop=True)
 
     time_threshold = data[timestamp_col].quantile(quantile)
-    user_second_timestamp = (
-        data.groupby(user_col).nth(1).set_index("user_id")[timestamp_col]
-    )
-    train_users = user_second_timestamp[user_second_timestamp <= time_threshold].index
-    train = data[data[user_col].isin(train_users)]
-    train = train[train[timestamp_col] <= time_threshold]
-    user_last_timestamp = (
-        data.groupby(user_col).nth(-1).set_index("user_id")[timestamp_col]
-    )
-    test_users = user_last_timestamp[user_last_timestamp > time_threshold].index
-    test = data[data[user_col].isin(test_users)]
-    test = test[test[user_col].isin(train_users)]
+    train = data[data[timestamp_col] <= time_threshold]
+    test = data[data[timestamp_col] > time_threshold]
 
     return train, test, time_threshold
 
@@ -102,7 +92,7 @@ def main(
             f"Unknown validation_type: {validation_type}. Use 'by_user', 'by_time', or 'last'."
         )
 
-    output_dir = f"data/global_split/{data_path.stem}"
+    output_dir = f"data/{data_path.stem}"
     os.makedirs(output_dir, exist_ok=True)
 
     train_path = os.path.join(output_dir, "train.csv")

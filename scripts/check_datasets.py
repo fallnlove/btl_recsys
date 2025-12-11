@@ -24,8 +24,8 @@ def main(filename: str):
 
     # 2. user_id / item_id check
     for col in ["user_id", "item_id"]:
-        if df[col].min() != 1 or df[col].nunique() != df[col].max():
-            raise ValueError(f"{col} must be consecutive starting from 1")
+        if df[col].min() != 0 or df[col].nunique() != df[col].max() + 1:
+            raise ValueError(f"{col} must be consecutive starting from 0")
 
     # 3. Timestamp sort check
     if not df["timestamp"].is_monotonic_increasing:
@@ -49,6 +49,19 @@ def main(filename: str):
     print(f"Avg interactions per user: {avg_interactions:.4f}")
     print(f"Median interactions per user: {median_interactions:.4f}")
     print(f"Sparsity: {sparsity:.8f}")
+
+    (path.parent / Path(filename).stem).mkdir(exist_ok=True)
+    with open(path.parent / Path(filename).stem / f"info.json", "w") as f:
+        info = {
+            "num_users": num_users,
+            "num_items": num_items,
+            "avg_interactions": avg_interactions,
+            "median_interactions": median_interactions,
+            "sparsity": sparsity,
+        }
+        import json
+
+        json.dump(info, f, indent=4)
 
 
 if __name__ == "__main__":

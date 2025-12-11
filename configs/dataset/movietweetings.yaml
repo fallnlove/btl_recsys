@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: movietweetings
+url: https://disk.360.yandex.ru/d/3LeKYSU0eOKSgA

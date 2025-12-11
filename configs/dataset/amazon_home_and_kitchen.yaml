@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: ratings_Home_and_Kitchen
+url: https://disk.360.yandex.ru/d/IQNb-ydBO48VWw

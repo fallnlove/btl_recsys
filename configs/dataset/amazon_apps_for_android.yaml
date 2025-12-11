@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: ratings_Apps_for_Android
+url: https://disk.360.yandex.ru/d/x6tOo2ILDr2ZgQ

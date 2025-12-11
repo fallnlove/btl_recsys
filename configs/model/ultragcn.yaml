@@ -1,0 +1,17 @@
+_target_: src.models.UltraGCN
+name: ultragcn
+embedding_dim: 128
+w1: 1e-7
+w2: 1.
+w3: 1e-7
+w4: 1.
+negative_weight: 200
+negative_num: 200
+gamma: 1e-3
+lambda_reg: 1e-4
+num_epochs: 2000
+lr: 1e-3
+batch_size: 1024
+num_neighbors: 10
+early_stopping: True
+tracked_metric: ndcg@10

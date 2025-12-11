@@ -1,3 +1,4 @@
+import json
 import torch
 import numpy as np
 import pandas as pd
@@ -6,36 +7,49 @@ from scipy.sparse import coo_array
 
 from torch.utils.data import Dataset
 
+from src.utils.download import download
+
+
 class RecSysDataset(Dataset):
-    def __init__(self, name: str, split: str = "train"):
+    def __init__(self, name: str, url: str, split: str = "train"):
         assert split in ["train", "val", "test"], "Split must be one of 'train', 'val', or 'test'."
         self._split = split
         self.name = name
+        folder = Path("data") / name
 
-        self.all_path = Path("data") / (name + ".csv")
-        self.train_path = Path("data/global_split") / name / "train.csv"
-        self.val_path = Path("data/global_split") / name / "validation.csv"
-        self.test_path = Path("data/global_split") / name / "test.csv"
+        download(url, "data/")
+        info = folder / "info.json"
+        train_path = folder / "train.csv"
+        val_path = folder / "validation.csv"
+        test_path = folder / "test.csv"
 
-        all_df = pd.read_csv(self.all_path)
-        self._df_train = pd.read_csv(self.train_path).sort_values(by=["timestamp"])
-        self._df_val = pd.read_csv(self.val_path).sort_values(by=["timestamp"])
-        self._df_test = pd.read_csv(self.test_path).sort_values(by=["timestamp"])
+        self.meta_info = json.load(open(info, "r"))
+        self._df_train = pd.read_csv(train_path).sort_values(by=["timestamp"])
+        self._df_val = pd.read_csv(val_path).sort_values(by=["timestamp"])
+        self._df_test = pd.read_csv(test_path).sort_values(by=["timestamp"])
 
-        self._n_users = all_df["user_id"].nunique()
-        self._n_items = all_df["item_id"].nunique()
+        self._n_users = self.meta_info["num_users"]
+        self._n_items = self.meta_info["num_items"]
 
         if split == "train":
             self._df = self._df_train
+            self._df_merged = self._df_train
         elif split == "val":
             self._df = self._df_val
-            holdout_path = Path("data/global_split") / name / "holdout_validation.csv"
-            self._holdout_df = pd.read_csv(holdout_path)
-            self._holdout = np.zeros(self.n_users, dtype=np.int64)
-            self._holdout[self._holdout_df['user_id'].values] = self._holdout_df['item_id'].values
+            holdout_path = folder / "holdout_validation.csv"
+            self._df_merged = pd.concat(
+                [self._df_train, self._df_val],
+                ignore_index=True
+            ).sort_values(by=["timestamp"])
         elif split == "test":
             self._df = self._df_test
-            holdout_path = Path("data/global_split") / name / "holdout_test.csv"
+            holdout_path = folder / "holdout_test.csv"
+            self._df_merged = pd.concat(
+                [self._df_train, self._df_val, self._df_test],
+                ignore_index=True
+            ).sort_values(by=["timestamp"])
+        
+        if split in ["val", "test"]:
             self._holdout_df = pd.read_csv(holdout_path)
             self._holdout = np.zeros(self.n_users, dtype=np.int64)
             self._holdout[self._holdout_df['user_id'].values] = self._holdout_df['item_id'].values
@@ -45,22 +59,30 @@ class RecSysDataset(Dataset):
     
     def _create_index(self):
         if self._split == "train":
+            groups = (
+                self._df.groupby('user_id')['item_id']
+                .apply(list)
+                .to_dict()
+            )
             return [
-                torch.Tensor(self._df[self._df['user_id'] == user_id]['item_id'].tolist())
+                torch.Tensor(groups.get(user_id, []))
                 for user_id in self._users
             ]
 
-        df_merged = pd.concat(
-            [self._df_train, self._df_val]
-            if self._split == "val" else
-            [self._df_train, self._df_val, self._df_test],
-            ignore_index=True
-        ).sort_values(by=["timestamp"])
-
+        holdout_ts = (
+            self._holdout_df[['user_id', 'timestamp']]
+                .rename(columns={'timestamp': 'holdout_ts'})
+        )
+        df = self._df_merged.merge(holdout_ts, on='user_id', how='left')
+        df = df[df['timestamp'] < df['holdout_ts']]
+        df = df.sort_values(['user_id', 'timestamp'])
+        groups = (
+            df.groupby('user_id')['item_id']
+            .apply(list)
+            .to_dict()
+        )
         return [
-            torch.Tensor(df_merged[df_merged['user_id'] == user_id]
-                .loc[lambda x: x['timestamp'] < self._holdout_df[self._holdout_df['user_id'] == user_id]['timestamp'].item()]
-                ['item_id'].tolist())
+            torch.tensor(groups.get(user_id, []))
             for user_id in self._users
         ]
 

@@ -1,9 +1,8 @@
-import optuna
+import torch
 import numpy as np
-from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from src.base import BaseModel
-from src.utils.collate import collate_fn
 
 class PopularRandom(BaseModel):
     """
@@ -17,26 +16,40 @@ class PopularRandom(BaseModel):
         Fit the model to the dataset.
         """
 
-        n_items = train_dataset.n_items
-        self.item_counts = np.zeros(n_items, dtype=np.int64)
-        for user_id, item_id in zip(*train_dataset.get_coo_array().coords):
-            self.item_counts[item_id] += 1
+        self.item_counts = train_dataset.get_coo_array().sum(axis=0)
 
     def predict(self, dataset, top_n: int) -> np.ndarray:
         """
         Make predictions on the given data.
         """
-        predictions = np.zeros((dataset.n_users, top_n), dtype=np.int64)
-        dataloader = dataset.get_dataloader(batch_size=1, shuffle=False)
-        for batch in dataloader:
-            probs = np.copy(self.item_counts).astype(np.float32)
-            probs[batch['history'][0].numpy().astype(np.int64).tolist()] = 0
-            predictions[batch['user_id'].numpy()] = np.random.choice(
-                dataset.n_items,
-                size=(top_n, ),
-                replace=False,
-                p=probs / probs.sum(),
-            )
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        base_probs = torch.as_tensor(self.item_counts, dtype=torch.float32, device=device)
+        n_users = dataset.n_users
+        n_items = dataset.n_items
+
+        predictions = np.zeros((n_users, top_n), dtype=np.int64)
+
+        dataloader = dataset.get_dataloader(batch_size=32, shuffle=False)
+
+        for batch in tqdm(dataloader, desc="Predicting"):
+            user_ids = batch["user_id"].to(device)            # shape: (B,)
+            history = batch["history"].to(device)             # shape: (B, L)
+
+            B = user_ids.size(0)
+
+            probs = base_probs.expand(B, n_items).clone()     # shape: (B, n_items)
+
+            mask = history >= 0
+            padded_history = history.clone()
+            padded_history[~mask] = 0
+            probs.scatter_(1, padded_history, 0.0)
+            sampled = torch.multinomial(
+                probs,
+                num_samples=top_n,
+                replacement=False
+            )   # shape: (B, top_n)
+            predictions[user_ids.cpu().numpy()] = sampled.cpu().numpy()
+
         return predictions
 
     def save_checkpoint(self, path: str):

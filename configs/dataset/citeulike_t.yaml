@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: citeulike_t
+url: https://disk.360.yandex.ru/d/XR-LakdhZ4nj0w

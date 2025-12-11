@@ -1,118 +1,147 @@
-import json
+import shutil
 from copy import deepcopy
 from pathlib import Path
 
 import click
 import optuna
-import pandas as pd
 from hydra import compose, initialize
 from omegaconf import DictConfig, OmegaConf
+from optuna.artifacts import FileSystemArtifactStore, upload_artifact
+from optuna.samplers import TPESampler
 from optuna.storages import JournalStorage
 from optuna.storages.journal import JournalFileBackend
+from optuna.trial import Trial
 
 from run_model import run_train
-from src.utils import create_logger
+from src.utils import save_metrics
 
-logger = create_logger(name=__name__)
-
-
-def update_cfg(base_cfg: DictConfig, trial: optuna.trial.Trial) -> DictConfig:
-    cfg = deepcopy(base_cfg)
-
-    if cfg.model_name == "mrgsrec":
-        cfg.model.num_hops = trial.suggest_categorical("num_hops", [1, 2, 3])
-        cfg.model.eta = trial.suggest_float("eta", 0.5, 1.0, step=0.1)
-
-        cfg.loss.local_coef = trial.suggest_float("local_coef", 0.0, 1.0, step=0.25)
-        cfg.loss.global_coef = trial.suggest_float("global_coef", 0.0, 1.0, step=0.25)
-        cfg.loss.fusion_coef = trial.suggest_float("fusion_coef", 0.0, 1.0, step=0.25)
-        cfg.loss.contrastive_coef = trial.suggest_float(
-            "contrastive_coef", 0.0, 1.0, step=0.25
-        )
-
-    logger.info(f"Trial params: {trial.params}")
-
-    return cfg
+CONFIG_DIR = "configs"
+OPTUNA_DIR = "optuna_outputs"
+TARGET_METRIC = "ndcg@10"
 
 
-def save_trial_results(
-    outdir: Path, trial_id: int, params: dict, metrics, index_path: str
-) -> Path:
-    trial_name = f"trial-{trial_id:04d}"
-    results_path = outdir / f"results_{trial_name}.json"
-    payload = {"params": params} | metrics
-    with open(results_path, "w") as f:
-        json.dump(payload, f, indent=2)
-    update_index(index_path, trial_id, params, metrics, results_path)
+def suggest_cfg(config: DictConfig, trial: Trial) -> DictConfig:
+    new_config = deepcopy(config)
+
+    for param in config.optuna_params:
+        name = param.name
+        type_ = param.type
+
+        if type_ == "categorical":
+            value = trial.suggest_categorical(name, param.choices)
+        elif type_ == "float":
+            low = param.low
+            high = param.high
+            step = param.get("step", None)
+            log = param.get("log", False)
+            value = trial.suggest_float(name, low, high, step=step, log=log)
+        elif type_ == "int":
+            low = param.low
+            high = param.high
+            step = param.get("step", 1)
+            log = param.get("log", False)
+            value = trial.suggest_int(name, low, high, step=step, log=log)
+        else:
+            raise ValueError(f"Unknown parameter type: {type_}")
+        
+        new_config.model.update({name: value})
+
+    return new_config
 
 
-def update_index(
-    index_path: Path, trial_id: int, params: dict, metrics, results_path: Path
-):
-    trial_name = f"trial-{trial_id:04d}"
+class Objective:
+    def __init__(
+        self,
+        config: DictConfig,
+        artifact_store: FileSystemArtifactStore,
+        tmp_dir: Path,
+    ) -> None:
+        self._config = config
+        self._tmp_dir = tmp_dir
+        self._artifact_store = artifact_store
 
-    row = {"trial": trial_name, "results_path": str(results_path)}
-    row.update(params | metrics)
+    def __call__(self, trial: Trial) -> float:
+        suggested_config = suggest_cfg(self._config, trial)
 
-    if index_path.exists():
-        df = pd.read_csv(index_path)
-        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-    else:
-        df = pd.DataFrame([row])
+        best_metrics = run_train(suggested_config)
 
-    param_cols = [c for c in df.columns if c not in ("trial", "results_path")]
-    df = df[["trial"] + sorted(param_cols) + ["results_path"]]
+        files_dir = self._tmp_dir / str(trial.number)
+        files_dir.mkdir(exist_ok=False)
 
-    df.to_csv(index_path, index=False)
+        metric_keys = set(best_metrics.keys())
+        for key in metric_keys:
+            trial.set_user_attr(key, best_metrics[key])
+
+        save_metrics(best_metrics, output_dir=files_dir)
+
+        for file in files_dir.iterdir():
+            if file.is_file() and file.suffix == ".png":
+                artifact_id = upload_artifact(
+                    artifact_store=self._artifact_store,
+                    file_path=str(file.resolve()),
+                    study_or_trial=trial,
+                )
+
+                trial.set_user_attr(file.stem, artifact_id)
+
+        shutil.rmtree(files_dir)
+
+        return best_metrics[f"val/{TARGET_METRIC}"]
 
 
 @click.command()
-@click.option("--config_name", "-cp", type=str)
-@click.option("--num_trials", "-nt", type=int)
-@click.option("--exp_name", "-en", type=str)
-@click.option("--model_name", "-mn", type=str)
-@click.option("--parallel_mode", "-pm", is_flag=True, default=False)
-@click.option("--dataset_name", "-ds", default=None)
-def main(config_name, num_trials, exp_name, model_name, parallel_mode, dataset_name):
-    with initialize(config_path="configs"):
-        base_cfg = compose(config_name=config_name)
-    OmegaConf.to_yaml(base_cfg)
-    OmegaConf.set_struct(base_cfg, False)
-    base_cfg["model_name"] = model_name
-    if dataset_name is not None:
-        base_cfg["dataset"]["name"] = dataset_name
+@click.option("--config_name", "-cn", type=str)
+@click.option("--experiment_name", "-en", type=str)
+@click.option("--dataset", "-ds", type=str)
+@click.option("--timeout", "-to", type=float, default=4 * 60 * 60)
+@click.option("--num_trials", "-nt", default=None)
+@click.option("--verbose", "-v", is_flag=True, default=True)
+def main(
+    config_name: str,
+    experiment_name: str,
+    dataset: str,
+    timeout: float,
+    num_trials: int,
+    verbose: bool,
+):
+    out_dir = Path(OPTUNA_DIR) / experiment_name
+    tmp_dir = out_dir / "tmp"
+    artifact_dir = out_dir / "artifacts"
 
-    outdir = Path("optuna_outputs") / exp_name
-    if parallel_mode:
-        outdir.mkdir(exist_ok=True, parents=True)
-    else:
-        outdir.mkdir(exist_ok=False, parents=True)
-    index_path = outdir / "index.csv"
+    out_dir.mkdir(exist_ok=False, parents=True)
+    tmp_dir.mkdir(exist_ok=False, parents=True)
+    artifact_dir.mkdir(exist_ok=False, parents=True)
+
+    artifact_store = FileSystemArtifactStore(base_path=str(artifact_dir))
+
+    with initialize(config_path=CONFIG_DIR):
+        base_cfg = compose(config_name=config_name, overrides=[
+            f"+optuna_params={experiment_name}",
+            f"dataset={dataset}"
+        ])
+
+    OmegaConf.set_struct(base_cfg, False)
+
+    if verbose:
+        print(OmegaConf.to_yaml(base_cfg))
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(n_startup_trials=100),
-        study_name=exp_name,
+        sampler=TPESampler(n_startup_trials=100),
+        study_name=experiment_name,
         storage=JournalStorage(
-            JournalFileBackend(file_path=str(outdir / f"./{exp_name}.log"))
+            JournalFileBackend(file_path=str(out_dir / f"./{experiment_name}.log"))
         ),
         load_if_exists=True,
     )
 
-    def objective_fn(trial: optuna.trial.Trial) -> float:
-        cfg = update_cfg(base_cfg, trial)
+    study.optimize(
+        Objective(config=base_cfg, artifact_store=artifact_store, tmp_dir=tmp_dir),
+        n_trials=num_trials,
+        timeout=timeout,
+    )
 
-        metrics = run_train(cfg, verbose=False)
-
-        save_trial_results(outdir, trial.number, trial.params, metrics, index_path)
-
-        return metrics["ndcg@10"]
-
-    study.optimize(objective_fn, n_trials=num_trials)
-
-    best = study.best_trial
-    print("Best trial:", f"trial-{best.number:04d}", "objective:", best.value)
-    print("Best params:", json.dumps(best.params, indent=2, sort_keys=True))
+    tmp_dir.rmdir()
 
 
 if __name__ == "__main__":

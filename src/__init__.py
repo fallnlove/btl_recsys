@@ -16,6 +16,7 @@ from .metrics import (
 
 from .models import (
     PopularRandom,
+    UltraGCN
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "RecallMetric",
     "Summarizer",
     "PopularRandom",
+    "UltraGCN",
 ]
