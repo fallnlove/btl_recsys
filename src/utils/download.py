@@ -10,7 +10,7 @@ def download(link, download_location):
     download_url = response.json()["href"]
     file_name = urllib.parse.unquote(download_url.split("filename=")[1].split("&")[0])
     save_path = os.path.join(download_location, file_name)
-    if pathlib.Path(download_location).with_suffix('').exists():
+    if pathlib.Path(save_path).with_suffix('').exists():
         return
 
     with open(save_path, "wb") as file:

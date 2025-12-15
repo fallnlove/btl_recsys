@@ -91,15 +91,17 @@ class Objective:
 
 @click.command()
 @click.option("--config_name", "-cn", type=str)
-@click.option("--experiment_name", "-en", type=str)
 @click.option("--dataset", "-ds", type=str)
+@click.option("--optuna_params", "-op", type=str)
+@click.option("--experiment_name", "-en", type=str)
 @click.option("--timeout", "-to", type=float, default=4 * 60 * 60)
-@click.option("--num_trials", "-nt", default=None)
+@click.option("--num_trials", "-nt", default=None, type=int)
 @click.option("--verbose", "-v", is_flag=True, default=True)
 def main(
     config_name: str,
-    experiment_name: str,
     dataset: str,
+    optuna_params: str,
+    experiment_name: str,
     timeout: float,
     num_trials: int,
     verbose: bool,
@@ -116,7 +118,7 @@ def main(
 
     with initialize(config_path=CONFIG_DIR):
         base_cfg = compose(config_name=config_name, overrides=[
-            f"+optuna_params={experiment_name}",
+            f"+optuna_params={optuna_params}",
             f"dataset={dataset}"
         ])
 
