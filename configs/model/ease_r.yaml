@@ -1,0 +1,3 @@
+_target_: src.models.EASE_R
+name: ease_r
+regularization: 0.01

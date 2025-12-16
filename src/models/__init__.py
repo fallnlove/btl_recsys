@@ -1,4 +1,6 @@
 from src.models.popular_random import PopularRandom
+from src.models.ease_r import EASE_R
+from src.models.bpr_mf import BPR_MF
 from src.models.als_fm import ALSFM_sparse
 from src.models.ultragcn import UltraGCN
 from src.models.sgd_mf import MFSGD
@@ -10,4 +12,6 @@ __all__ = [
     "UltraGCN",
     "MFSGD",
     "LightGCN",
+    "BPR_MF",
+    "EASE_R",
 ]

@@ -1,0 +1,7 @@
+_target_: src.models.BPR_MF
+name: bpr_mf
+rank: 10
+n_epochs: 5
+learning_rate: 0.01
+regularization: 0.01
+seed: 123345
