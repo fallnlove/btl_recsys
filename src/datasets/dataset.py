@@ -56,7 +56,7 @@ class RecSysDataset(Dataset):
 
         self._users = self._df["user_id"].unique()
         self._index = self._create_index()
-    
+
     def _create_index(self):
         if self._split == "train":
             groups = (
@@ -96,21 +96,29 @@ class RecSysDataset(Dataset):
         return self._n_items
 
     def get_coo_array(self) -> coo_array:
-        assert self._split == "train", "COO array can only be created for training data."
+        #assert self._split == "train", "COO array can only be created for training data."
         return coo_array(
-            (np.ones(self._df["user_id"].values.shape[0]), 
-             (self._df["user_id"].values, self._df["item_id"].values)), 
+            (np.ones(self._df["user_id"].values.shape[0]),
+             (self._df["user_id"].values, self._df["item_id"].values)),
             shape=(self.n_users, self.n_items)
         )
-    
+
+    def get_coo_array_rating(self) -> coo_array:
+        #assert self._split == "train", "COO array can only be created for training data."
+        return coo_array(
+             (self._df["rating"].values,
+             (self._df["user_id"].values, self._df["item_id"].values)),
+            shape=(self.n_users, self.n_items)
+        )
+
     def get_holdout_array(self) -> np.ndarray:
         assert self._split in ["val", "test"], "Holdout array can only be created for validation or test data."
         return self._holdout
-    
+
     def get_holdout_users(self) -> np.ndarray:
         assert self._split in ["val", "test"], "Holdout items can only be retrieved for validation or test data."
         return self._holdout_df['user_id'].values
-    
+
     def __len__(self):
         return len(self._users)
 
@@ -122,7 +130,7 @@ class RecSysDataset(Dataset):
         if self._split in ["val", "test"]:
             result["holdout"] = self._holdout[self._users[idx]]
         return result
-    
+
     def get_dataloader(self, batch_size: int, shuffle: bool = True, num_workers: int = 0):
         from torch.utils.data import DataLoader
         from src.utils.collate import collate_fn
