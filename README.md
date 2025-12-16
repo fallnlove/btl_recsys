@@ -31,7 +31,7 @@ RecSys-BTL/
 To make global time split and random holdout use this:
 
 ```bash
-python3 scripts/make_dataset.py --filename <path_to_csv>
+python3 scripts/dataset_pipeline.py --filename <path_to_csv>
 --user_col <name_of_userid_column>
 --item_col <name_of_itemid_column>
 --time_col <name_of_timestamp_column>

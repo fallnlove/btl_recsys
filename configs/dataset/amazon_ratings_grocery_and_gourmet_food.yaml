@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: amazon_ratings_grocery_and_gourmet_food
+url: https://disk.360.yandex.ru/d/ixbyu9XfMWt1OQ

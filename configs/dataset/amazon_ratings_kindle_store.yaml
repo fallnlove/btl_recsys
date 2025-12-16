@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: amazon_ratings_kindle_store
+url: https://disk.360.yandex.ru/d/q9sEkL8VRd6-IQ

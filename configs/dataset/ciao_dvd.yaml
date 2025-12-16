@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: ciao_dvd
+url: https://disk.360.yandex.ru/d/NH6H7RhHgLy3Hg
