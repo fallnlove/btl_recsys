@@ -217,7 +217,7 @@ class UltraGCN(BaseModel, nn.Module):
         beta_uD[users_D > 0] = np.sqrt(users_D[users_D > 0] + 1) / users_D[users_D > 0]
         beta_uD = beta_uD
         beta_iD = 1 / np.sqrt(items_D + 1)
-        beta_iD, beta_uD = torch.from_numpy(beta_iD), torch.from_numpy(beta_uD)
+        beta_iD, beta_uD = torch.from_numpy(beta_iD).to(self.device), torch.from_numpy(beta_uD).to(self.device)
         A = torch.sparse_csr_tensor(
             torch.tensor(A.indptr, dtype=torch.long),
             torch.tensor(A.indices, dtype=torch.long),
