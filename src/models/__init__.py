@@ -1,4 +1,6 @@
 from src.models.popular_random import PopularRandom
+from src.models.user_knn import UserKNNModel
+from src.models.item_knn import ItemKNNModel
 from src.models.ease_r import EASE_R
 from src.models.bpr_mf import BPR_MF
 from src.models.als_fm import ALSFM_sparse
@@ -14,4 +16,6 @@ __all__ = [
     "LightGCN",
     "BPR_MF",
     "EASE_R",
+    "UserKNNModel",
+    "ItemKNNModel",
 ]

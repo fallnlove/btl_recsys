@@ -1,0 +1,3 @@
+_target_: src.models.ItemKNNModel
+name: item_knn
+n_neighbors: 5
