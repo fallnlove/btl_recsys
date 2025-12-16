@@ -11,3 +11,5 @@ optuna
 optuna-dashboard
 requests
 torch-geometric
+scikit-learn
+numba
