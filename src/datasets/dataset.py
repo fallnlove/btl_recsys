@@ -11,9 +11,11 @@ from src.utils.download import download
 
 
 class RecSysDataset(Dataset):
-    def __init__(self, name: str, url: str, split: str = "train"):
+    def __init__(self, name: str, url: str, split: str = "train", merge_train_val: bool = False):
         assert split in ["train", "val", "test"], "Split must be one of 'train', 'val', or 'test'."
+        assert not (merge_train_val and split == "val"), "You cannot use validation split when merging train and val sets."
         self._split = split
+        self._merge_train_val = merge_train_val
         self.name = name
         folder = Path("data") / name
 
@@ -48,14 +50,32 @@ class RecSysDataset(Dataset):
                 [self._df_train, self._df_val, self._df_test],
                 ignore_index=True
             ).sort_values(by=["timestamp"])
-        
+
         if split in ["val", "test"]:
             self._holdout_df = pd.read_csv(holdout_path)
             self._holdout = np.zeros(self.n_users, dtype=np.int64)
             self._holdout[self._holdout_df['user_id'].values] = self._holdout_df['item_id'].values
+            self.delete_holdout_items()
+
+        if merge_train_val and split == "train":
+            self._df = pd.concat(
+                [self._df_train, self._df_val],
+                ignore_index=True
+            ).sort_values(by=["timestamp"])
+            self._df_merged = self._df
 
         self._users = self._df["user_id"].unique()
         self._index = self._create_index()
+
+    def delete_holdout_items(self):
+        holdout_ts = (
+            self._holdout_df[['user_id', 'timestamp']]
+                .rename(columns={'timestamp': 'holdout_ts'})
+        )
+        df = self._df_merged.merge(holdout_ts, on='user_id', how='left')
+        df = df[df['timestamp'] < df['holdout_ts']]
+        df = df.sort_values(['timestamp'])
+        self._df = df.reset_index(drop=True)
 
     def _create_index(self):
         if self._split == "train":
@@ -69,15 +89,8 @@ class RecSysDataset(Dataset):
                 for user_id in self._users
             ]
 
-        holdout_ts = (
-            self._holdout_df[['user_id', 'timestamp']]
-                .rename(columns={'timestamp': 'holdout_ts'})
-        )
-        df = self._df_merged.merge(holdout_ts, on='user_id', how='left')
-        df = df[df['timestamp'] < df['holdout_ts']]
-        df = df.sort_values(['user_id', 'timestamp'])
         groups = (
-            df.groupby('user_id')['item_id']
+            self._df.groupby('user_id')['item_id']
             .apply(list)
             .to_dict()
         )
@@ -96,7 +109,6 @@ class RecSysDataset(Dataset):
         return self._n_items
 
     def get_coo_array(self) -> coo_array:
-        #assert self._split == "train", "COO array can only be created for training data."
         return coo_array(
             (np.ones(self._df["user_id"].values.shape[0]),
              (self._df["user_id"].values, self._df["item_id"].values)),
@@ -104,7 +116,6 @@ class RecSysDataset(Dataset):
         )
 
     def get_coo_array_rating(self) -> coo_array:
-        #assert self._split == "train", "COO array can only be created for training data."
         return coo_array(
              (self._df["rating"].values,
              (self._df["user_id"].values, self._df["item_id"].values)),

@@ -55,6 +55,14 @@ def suggest_cfg(config: DictConfig, trial: Trial) -> DictConfig:
 
     return new_config
 
+def set_params(config: DictConfig, params: dict) -> DictConfig:
+    new_config = deepcopy(config)
+
+    for name, value in params.items():
+        new_config.model.update({name: value})
+
+    return new_config
+
 
 class Objective:
     def __init__(
@@ -70,7 +78,7 @@ class Objective:
     def __call__(self, trial: Trial) -> float:
         suggested_config = suggest_cfg(self._config, trial)
 
-        best_metrics = run_train(suggested_config)
+        best_metrics = run_train(suggested_config, verbose=False, test_mode=False)
 
         files_dir = self._tmp_dir / str(trial.number)
         files_dir.mkdir(exist_ok=False)
@@ -103,7 +111,7 @@ class Objective:
 @click.option("--experiment_name", "-en", type=str)
 @click.option("--timeout", "-to", type=float, default=4 * 60 * 60)
 @click.option("--num_trials", "-nt", default=None, type=int)
-@click.option("--verbose", "-v", is_flag=True, default=True)
+@click.option("--verbose", "-v", is_flag=True, default=False)
 def main(
     config_name: str,
     dataset: str,
@@ -151,16 +159,23 @@ def main(
     )
 
     best = study.best_trial
+    best_cfg = set_params(base_cfg, best.params)
+    best_metrics = run_train(best_cfg, verbose=verbose, test_mode=True)
     best_payload = {
         "number": best.number,
         "value": best.value,
         "params": best.params,
         "user_attrs": best.user_attrs,
+        "test_metrics": best_metrics,
     }
 
     best_file = out_dir / "best_trial.yaml"
     with open(best_file, "w") as f:
         f.write(OmegaConf.to_yaml(OmegaConf.create(best_payload)))
+
+    best_config = out_dir / f"{experiment_name}.yaml"
+    with open(best_config, "w") as f:
+        f.write(OmegaConf.to_yaml(best_cfg))
 
     tmp_dir.rmdir()
 

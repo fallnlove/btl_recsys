@@ -26,7 +26,7 @@ def main(cfg):
     save_metrics(metrics, output_dir)
 
 
-def run_train(cfg, verbose: bool = True):
+def run_train(cfg, verbose: bool = True, test_mode: bool = False):
     fix_random_seed(cfg.get("seed", 42))
 
     config = OmegaConf.to_container(cfg, resolve=True)
@@ -37,8 +37,8 @@ def run_train(cfg, verbose: bool = True):
     if verbose:
         logger.info(f"Model init: {str(model)}\n")
 
-    train_dataset = instantiate(cfg.dataset, split="train")
-    val_dataset = instantiate(cfg.dataset, split="val")
+    train_dataset = instantiate(cfg.dataset, split="train", merge_train_val=test_mode)
+    eval_dataset = instantiate(cfg.dataset, split="test" if test_mode else "val", merge_train_val=test_mode)
 
     metrics = Summarizer([
         instantiate(metric_cfg, n_items=train_dataset.n_items) for metric_cfg in cfg.metrics
@@ -46,20 +46,20 @@ def run_train(cfg, verbose: bool = True):
 
     if verbose:
         logger.info(f"Start training...\n")
-    model.fit(train_dataset, val_dataset)
-    predictions = model.predict(val_dataset, top_n=cfg.max_top_n)
+    model.fit(train_dataset, eval_dataset)
+    predictions = model.predict(eval_dataset, top_n=cfg.max_top_n)
     if verbose:
         logger.info(f"Training completed.\n")
 
-    holdout_users = val_dataset.get_holdout_users()
-    val_metrics = {f"val/{k}": v for k, v in metrics(
+    holdout_users = eval_dataset.get_holdout_users()
+    eval_metrics = {f"{eval_dataset._split}/{k}": v for k, v in metrics(
         predictions[holdout_users,:],
-        val_dataset.get_holdout_array()[holdout_users]
+        eval_dataset.get_holdout_array()[holdout_users]
     ).items()}
     if verbose:
-        logger.info(f"Validation metrics: {json.dumps(val_metrics, indent=2)}\n")
+        logger.info(f"Final metrics: {json.dumps(eval_metrics, indent=2)}\n")
 
-    return val_metrics
+    return eval_metrics
 
 if __name__ == "__main__":
     main()
