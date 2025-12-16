@@ -19,7 +19,7 @@ class RecSysDataset(Dataset):
         self.name = name
         folder = Path("data") / name
 
-        download(url, "data/")
+        download(url, f"data/{name}")
         info = folder / "info.json"
         train_path = folder / "train.csv"
         val_path = folder / "validation.csv"
@@ -53,9 +53,9 @@ class RecSysDataset(Dataset):
 
         if split in ["val", "test"]:
             self._holdout_df = pd.read_csv(holdout_path)
+            self.delete_holdout_items()
             self._holdout = np.zeros(self.n_users, dtype=np.int64)
             self._holdout[self._holdout_df['user_id'].values] = self._holdout_df['item_id'].values
-            self.delete_holdout_items()
 
         if merge_train_val and split == "train":
             self._df = pd.concat(
@@ -75,7 +75,12 @@ class RecSysDataset(Dataset):
         df = self._df_merged.merge(holdout_ts, on='user_id', how='left')
         df = df[df['timestamp'] < df['holdout_ts']]
         df = df.sort_values(['timestamp'])
-        self._df = df.reset_index(drop=True)
+        self._df_merged = df.reset_index(drop=True)
+        # delete users with no history
+        users_with_history = self._df_merged['user_id'].unique()
+        self._holdout_df = self._holdout_df[
+            self._holdout_df['user_id'].isin(users_with_history)
+        ].reset_index(drop=True)
 
     def _create_index(self):
         if self._split == "train":
@@ -90,7 +95,7 @@ class RecSysDataset(Dataset):
             ]
 
         groups = (
-            self._df.groupby('user_id')['item_id']
+            self._df_merged.groupby('user_id')['item_id']
             .apply(list)
             .to_dict()
         )
@@ -98,7 +103,6 @@ class RecSysDataset(Dataset):
             torch.tensor(groups.get(user_id, []))
             for user_id in self._users
         ]
-
 
     @property
     def n_users(self) -> int:
