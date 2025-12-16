@@ -15,6 +15,13 @@ from optuna.trial import Trial
 from run_model import run_train
 from src.utils import save_metrics
 
+import logging
+
+# Mute Numba debug logs
+logging.getLogger('numba').setLevel(logging.WARNING)
+logging.getLogger('numba.core.ssa').setLevel(logging.WARNING)
+logging.getLogger('numba.core.byteflow').setLevel(logging.WARNING)
+
 CONFIG_DIR = "configs"
 OPTUNA_DIR = "optuna_outputs"
 TARGET_METRIC = "ndcg@10"
@@ -129,7 +136,7 @@ def main(
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=TPESampler(n_startup_trials=100),
+        sampler=TPESampler(n_startup_trials=10),
         study_name=experiment_name,
         storage=JournalStorage(
             JournalFileBackend(file_path=str(out_dir / f"./{experiment_name}.log"))
@@ -142,6 +149,18 @@ def main(
         n_trials=num_trials,
         timeout=timeout,
     )
+
+    best = study.best_trial
+    best_payload = {
+        "number": best.number,
+        "value": best.value,
+        "params": best.params,
+        "user_attrs": best.user_attrs,
+    }
+
+    best_file = out_dir / "best_trial.yaml"
+    with open(best_file, "w") as f:
+        f.write(OmegaConf.to_yaml(OmegaConf.create(best_payload)))
 
     tmp_dir.rmdir()
 

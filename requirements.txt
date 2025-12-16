@@ -1,4 +1,6 @@
-numpy
+numpy==1.26.4
+pandas==2.1.4
+seaborn==0.13.2
 scipy
 torch
 tqdm
@@ -8,3 +10,4 @@ hydra-core
 optuna
 optuna-dashboard
 requests
+torch-geometric

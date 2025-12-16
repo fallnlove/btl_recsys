@@ -1,0 +1,14 @@
+defaults:
+  - dataset: movielens
+  - model: lightgcn
+  - metrics: base
+  - _self_
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${model.name}__${dataset.name}__${now:%H-%M-%S}
+  sweep:
+    dir: outputs/sweeps/${now:%Y-%m-%d}/${model.name}__${dataset.name}__${now:%H-%M-%S}
+
+seed: 42
+max_top_n: 20

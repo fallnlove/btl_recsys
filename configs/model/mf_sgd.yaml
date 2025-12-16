@@ -1,0 +1,15 @@
+_target_: src.models.MFSGD
+name: "MF_SGD"
+rank: 128
+regularization: 1e-4
+learning_rate: 1e-2
+n_epochs: 500
+n_epochs_folding: 20
+n_valid: 10
+verbose: False
+lambda_geo: 256
+eta: 1
+resample_every_factor: 1.0
+min_folding_epochs: 2
+folding_epsilon: 1e-3
+patience: 2

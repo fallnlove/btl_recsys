@@ -1,0 +1,26 @@
+_target_: src.models.LightGCN
+name: "LightGCN"
+rank: 32
+regularization: 1e-4
+batch_size: 1024
+learning_rate: 1e-2
+n_epochs: 500
+verbose: True
+seed: 42
+device: "auto"
+
+n_layers: 3
+edge_dropout: 0.0
+
+lambda_geo: 256
+eta: 1
+resample_every_factor: 1.0
+
+n_epochs_folding: 20
+min_folding_epochs: 2
+folding_epsilon: 1e-3
+folding_patience: 2
+
+n_valid: 10
+patience: 3
+val_top_n: 10

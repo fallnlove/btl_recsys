@@ -220,3 +220,4 @@ new_data
 results
 *.old
 .python-version
+*.DS_Store
