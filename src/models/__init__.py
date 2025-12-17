@@ -1,6 +1,7 @@
 from src.models.popular_random import PopularRandom
 from src.models.user_knn import UserKNNModel
 from src.models.item_knn import ItemKNNModel
+from src.models.seq_knn import SeqKNN
 from src.models.ease_r import EASE_R
 from src.models.bpr_mf import BPR_MF
 from src.models.als_fm import ALSFM_sparse
@@ -12,6 +13,7 @@ from src.models.pure_svd import PureSVDModel
 
 __all__ = [
     "PopularRandom",
+    "PopularRandom",
     "ALSFM_sparse",
     "UltraGCN",
     "MFSGD",
@@ -20,6 +22,7 @@ __all__ = [
     "EASE_R",
     "UserKNNModel",
     "ItemKNNModel",
+    "SeqKNN",
     "RandomModel",
     "PureSVDModel",
 ]

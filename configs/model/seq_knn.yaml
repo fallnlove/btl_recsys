@@ -1,0 +1,9 @@
+_target_: src.models.SeqKNN
+name: seq_knn
+n_neighbors: 500
+similarity_type: "cosine"
+binary_feedback: True
+downvote_seen_items: True
+weighting_mode: "reciprocal"
+position_decay: 1.0
+session_length_normalization: False
