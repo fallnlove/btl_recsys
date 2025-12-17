@@ -15,7 +15,7 @@ def fix_random_seed(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def save_metrics(all_metrics: list[dict], output_dir: str | Path):
+def save_metrics(all_metrics, output_dir):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

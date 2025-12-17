@@ -7,6 +7,8 @@ from src.models.als_fm import ALSFM_sparse
 from src.models.ultragcn import UltraGCN
 from src.models.sgd_mf import MFSGD
 from src.models.lightgcn import LightGCN
+from src.models.random import RandomModel
+from src.models.pure_svd import PureSVDModel
 
 __all__ = [
     "PopularRandom",
@@ -18,4 +20,6 @@ __all__ = [
     "EASE_R",
     "UserKNNModel",
     "ItemKNNModel",
+    "RandomModel",
+    "PureSVDModel",
 ]

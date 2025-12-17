@@ -1,0 +1,4 @@
+_target_: src.models.PureSVDModel
+name: pure_svd
+rank: 200
+s: 0.35
