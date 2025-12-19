@@ -7,7 +7,7 @@ from src.base import BaseModel
 from src.metrics import NDCGMetric
 
 
-@njit
+@njit(cache=True)
 def sigmoid(x):
     if x >= 0:
         return 1.0 / (1.0 + np.exp(-x))
@@ -16,7 +16,7 @@ def sigmoid(x):
         return z / (1.0 + z)
 
 
-@njit
+@njit(cache=True)
 def update_user_vector_adaptive(p_u, Q_pos, Q, r_inv_asc, rank, n_items, lr, reg, lambda_geo, eta):
     n_pos = len(Q_pos)
     indices = np.arange(n_pos)
@@ -59,7 +59,7 @@ def update_user_vector_adaptive(p_u, Q_pos, Q, r_inv_asc, rank, n_items, lr, reg
     return p_u
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def process_batch_with_folding_in(
         user_ids,
         history,
@@ -122,7 +122,7 @@ def process_batch_with_folding_in(
     return P_batch
 
 
-@njit  # equivalent to np.random.choice with probs
+@njit(cache=True)  # equivalent to np.random.choice with probs
 def sample_index_from_probs(probs):
     total = 0.0
     for i in range(probs.shape[0]):
@@ -138,7 +138,7 @@ def sample_index_from_probs(probs):
     return probs.shape[0] - 1
 
 
-@njit
+@njit(cache=True)
 def adaptive_sgd_epoch(P, Q, pos_users, pos_items, n_pos, n_steps, lambda_geo, eta, resample_every, lr, reg, rank,
                        n_items):
     r_inv_asc = np.empty((rank, n_items), dtype=np.int64)

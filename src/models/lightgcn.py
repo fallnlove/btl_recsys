@@ -371,12 +371,12 @@ class LightGCN(BaseModel):
                     if not mask_t.any():
                         continue
 
-                    pos_items_t = active_history[mask_t, t]
-                    u_batch = active_embs[mask_t]
-                    pos_vecs = item_embs[pos_items_t]
-
                     for _ in range(self.eta):
                         optimizer.zero_grad()
+
+                        pos_items_t = active_history[mask_t, t]
+                        u_batch = active_embs[mask_t]
+                        pos_vecs = item_embs[pos_items_t]
 
                         with torch.no_grad():
                             neg_nodes = self._sample_negative_adaptive_batch(u_batch.detach())

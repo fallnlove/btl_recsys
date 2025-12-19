@@ -11,5 +11,6 @@ optuna
 optuna-dashboard
 requests
 torch-geometric
-scikit-learn
+scikit-learn==1.3.2
 numba
+openpyxl

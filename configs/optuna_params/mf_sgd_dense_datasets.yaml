@@ -1,12 +1,12 @@
 - name: rank
   type: int
   low: 32
-  high: 512
+  high: 400
   step: 32
 - name: learning_rate
   type: float
   log: true
-  low: 1e-4
+  low: 1e-3
   high: 0.05
 - name: regularization
   type: float
@@ -17,14 +17,14 @@
   type: int
   low: 128
   high: 512
-  step: 64
+  step: 128
 - name: eta
   type: int
   low: 1
-  high: 4
+  high: 3
   step: 1
 - name: resample_every_factor
   type: float
   log: false
-  low: 0.1
-  high: 2.0
+  low: 0.2
+  high: 1.5
