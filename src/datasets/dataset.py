@@ -35,18 +35,15 @@ class RecSysDataset(Dataset):
 
         if split == "train":
             self._df = self._df_train
-            self._df_merged = self._df_train
         elif split == "val":
-            self._df = self._df_val
             holdout_path = folder / "holdout_validation.csv"
-            self._df_merged = pd.concat(
+            self._df = pd.concat(
                 [self._df_train, self._df_val],
                 ignore_index=True
             ).sort_values(by=["timestamp"])
         elif split == "test":
-            self._df = self._df_test
             holdout_path = folder / "holdout_test.csv"
-            self._df_merged = pd.concat(
+            self._df = pd.concat(
                 [self._df_train, self._df_val, self._df_test],
                 ignore_index=True
             ).sort_values(by=["timestamp"])
@@ -62,8 +59,6 @@ class RecSysDataset(Dataset):
                 [self._df_train, self._df_val],
                 ignore_index=True
             ).sort_values(by=["timestamp"])
-            self._df_merged = self._df
-
         self._users = self._df["user_id"].unique()
         self._index = self._create_index()
 
@@ -72,30 +67,19 @@ class RecSysDataset(Dataset):
             self._holdout_df[['user_id', 'timestamp']]
                 .rename(columns={'timestamp': 'holdout_ts'})
         )
-        df = self._df_merged.merge(holdout_ts, on='user_id', how='left')
+        df = self._df.merge(holdout_ts, on='user_id', how='left')
         df = df[df['timestamp'] < df['holdout_ts']]
         df = df.sort_values(['timestamp'])
-        self._df_merged = df.reset_index(drop=True)
+        self._df = df.reset_index(drop=True)
         # delete users with no history
-        users_with_history = self._df_merged['user_id'].unique()
+        users_with_history = self._df['user_id'].unique()
         self._holdout_df = self._holdout_df[
             self._holdout_df['user_id'].isin(users_with_history)
         ].reset_index(drop=True)
 
     def _create_index(self):
-        if self._split == "train":
-            groups = (
-                self._df.groupby('user_id')['item_id']
-                .apply(list)
-                .to_dict()
-            )
-            return [
-                torch.Tensor(groups.get(user_id, []))
-                for user_id in self._users
-            ]
-
         groups = (
-            self._df_merged.groupby('user_id')['item_id']
+            self._df.groupby('user_id')['item_id']
             .apply(list)
             .to_dict()
         )
