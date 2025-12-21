@@ -5,6 +5,7 @@ import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
+from pathlib import Path
 
 from src.base import BaseModel
 from src.metrics import Summarizer, NDCGMetric, RecallMetric, CoverageMetric
@@ -73,7 +74,8 @@ class UltraGCN(BaseModel, nn.Module):
             train_dataset.get_coo_array()
         )
         self.constraint_matrix, self.neighbor_matrix = self._compute_item_item_matrix(
-            train_dataset.get_coo_array()
+            train_dataset.get_coo_array(),
+            dataset_name=train_dataset.name,
         )
 
         optimizer = torch.optim.AdamW(
@@ -135,10 +137,12 @@ class UltraGCN(BaseModel, nn.Module):
                 if self.early_stopping and no_improve_epochs >= 5:
                     break
 
+    @torch.no_grad()
     def predict(self, dataset, top_n: int) -> np.ndarray:
         """
         Make predictions on the given data.
         """
+        self.eval()
         result = np.zeros((dataset.n_users, top_n), dtype=np.int64)
 
         for batch in tqdm(dataset.get_dataloader(batch_size=1024, shuffle=False), desc="Predicting"):
@@ -203,10 +207,15 @@ class UltraGCN(BaseModel, nn.Module):
         return torch.tensor(betas_user, dtype=torch.float32).to(self.device), \
                torch.tensor(betas_item, dtype=torch.float32).to(self.device)
 
-    def _compute_item_item_matrix(self, coo_matrix):
+    def _compute_item_item_matrix(self, coo_matrix, dataset_name: str):
         """
         Compute the item-item co-occurrence matrix.
         """
+        save_path = Path(f"ultragcn_cache/{dataset_name}/")
+        if save_path.exists():
+            constraint_matrix = torch.load(save_path / "constraint_matrix.pt").float().to(self.device)
+            neighbor_matrix = torch.load(save_path / "neighbor_matrix.pt").long().to(self.device)
+            return constraint_matrix, neighbor_matrix
         import cupy as cp
         import cupyx.scipy.sparse as csp
 
@@ -249,6 +258,9 @@ class UltraGCN(BaseModel, nn.Module):
 
         res_mat_torch = torch.utils.dlpack.from_dlpack(res_mat.toDlpack())
         res_sim_mat_torch = torch.utils.dlpack.from_dlpack(res_sim_mat.toDlpack())
+        save_path.mkdir(parents=True, exist_ok=True)
+        torch.save(res_sim_mat_torch.cpu(), save_path / "constraint_matrix.pt")
+        torch.save(res_mat_torch.cpu(), save_path / "neighbor_matrix.pt")
 
         return res_sim_mat_torch.float().to(self.device), res_mat_torch.long().to(self.device)
 
