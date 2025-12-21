@@ -15,7 +15,7 @@ echo "SLURM_ARRAY_TASK_ID = $SLURM_ARRAY_TASK_ID"
 echo "Model = $MODEL"
 
 module load Python
-conda activate recsys
+conda activate recsys_btl
 
 python3 sbatch/random/run.py \
     --dataset_idx "$SLURM_ARRAY_TASK_ID" \

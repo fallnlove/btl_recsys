@@ -207,9 +207,10 @@ class UltraGCN(BaseModel, nn.Module):
         """
         Compute the item-item co-occurrence matrix.
         """
+        import cupy as cp
+        import cupyx.scipy.sparse as csp
+
         A = coo_matrix.T.dot(coo_matrix)
-        res_mat = torch.zeros((self.n_items, self.num_neighbors))
-        res_sim_mat = torch.zeros((self.n_items, self.num_neighbors))
         items_D = np.sum(A, axis = 0).reshape(-1)
         users_D = np.sum(A, axis = 1).reshape(-1)
 
@@ -218,19 +219,38 @@ class UltraGCN(BaseModel, nn.Module):
         beta_uD = beta_uD
         beta_iD = 1 / np.sqrt(items_D + 1)
         beta_iD, beta_uD = torch.from_numpy(beta_iD), torch.from_numpy(beta_uD)
-        A = torch.sparse_csr_tensor(
-            torch.tensor(A.indptr, dtype=torch.long),
-            torch.tensor(A.indices, dtype=torch.long),
-            torch.tensor(A.data, dtype=torch.float32),
-            size=A.shape,
+        A_csr = csp.csr_matrix(
+            (cp.asarray(A.data, dtype=cp.float32),
+            cp.asarray(A.indices, dtype=cp.int32),
+            cp.asarray(A.indptr, dtype=cp.int32)),
+            shape=A.shape
         )
-        for i in tqdm(range(self.n_items), desc="Computing item-item matrix"):
-            row = (beta_uD[i] * beta_iD) * A[i].to_dense()
-            row_sims, row_idxs = torch.topk(row, self.num_neighbors)
-            res_mat[i] = row_idxs
-            res_sim_mat[i] = row_sims
+        beta_uD_cp = cp.asarray(beta_uD)
+        beta_iD_cp = cp.asarray(beta_iD)
+        K = self.num_neighbors
+        n_items = self.n_items
+        res_mat = cp.empty((n_items, K), dtype=cp.int32)
+        res_sim_mat = cp.empty((n_items, K), dtype=cp.float32)
+        for i in tqdm(range(n_items), desc="Computing item-item matrix"):
+            a_row = A_csr.getrow(i).toarray().ravel()
+            row = (beta_uD_cp[i] * beta_iD_cp) * a_row
+            if K < row.size:
+                idx_part = cp.argpartition(row, -K)[-K:]
+            else:
+                idx_part = cp.arange(row.size, dtype=cp.int32)
 
-        return res_sim_mat.float().to(self.device), res_mat.long().to(self.device)
+            vals_part = row[idx_part]
+            order = cp.argsort(vals_part)[::-1]
+            topk_idx = idx_part[order][:K]
+            topk_val = row[topk_idx]
+
+            res_mat[i] = topk_idx.astype(cp.int32)
+            res_sim_mat[i] = topk_val.astype(cp.float32)
+
+        res_mat_torch = torch.utils.dlpack.from_dlpack(res_mat.toDlpack())
+        res_sim_mat_torch = torch.utils.dlpack.from_dlpack(res_sim_mat.toDlpack())
+
+        return res_sim_mat_torch.float().to(self.device), res_mat_torch.long().to(self.device)
 
     def get_omegas(self, users, pos_items, neg_items):
         if self.w2 > 0:
