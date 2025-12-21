@@ -1,10 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
 
-import cupy as cp
-import cupyx.scipy.sparse as csp
-from cupyx.scipy.sparse.linalg import svds
-
 
 def gpu_sparse_svd(
     A_scipy: sp.spmatrix,
@@ -12,6 +8,9 @@ def gpu_sparse_svd(
     dtype=np.float32,
     return_numpy: bool = True,
 ):
+    import cupy as cp
+    import cupyx.scipy.sparse as csp
+    from cupyx.scipy.sparse.linalg import svds
 
     if not sp.issparse(A_scipy):
         raise TypeError("A_scipy must be a scipy sparse matrix")
