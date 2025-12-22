@@ -4,7 +4,7 @@ from src.models.item_knn import ItemKNNModel
 from src.models.seq_knn import SeqKNN
 from src.models.ease_r import EASE_R
 from src.models.bpr_mf import BPR_MF
-from src.models.als_fm import ALSFM_sparse
+from src.models.als_mf import ALSMF_sparse
 from src.models.ultragcn import UltraGCN
 from src.models.sgd_mf import MFSGD
 from src.models.lightgcn import LightGCN

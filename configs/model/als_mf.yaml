@@ -1,4 +1,4 @@
-_target_: src.models.ALSFM_sparse
+_target_: src.models.ALSMF_sparse
 name: als_fm
 lambda_: 1
 alpha: 1
