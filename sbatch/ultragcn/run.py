@@ -27,7 +27,7 @@ def main():
                         help="Index of dataset (0..N-1)")
     parser.add_argument("--model", type=str, required=True,
                         help="Model name (e.g. random, svd, als, etc.)")
-    parser.add_argument("--num_trials", type=int, default=1)
+    parser.add_argument("--num_trials", type=int, default=60)
 
     args = parser.parse_args()
 
@@ -41,14 +41,13 @@ def main():
 
     cmd = [
         "python3",
-        "run_model.py",
-        "-cn", args.model,
-        f"dataset={dataset}",
-        # "--config_name", args.model,
-        # "--dataset", dataset,
-        # "--optuna_params", "empty",
-        # "--experiment_name", args.model + "_" + dataset,
-        # "--num_trials", str(args.num_trials),
+        "run_optuna.py",
+        "--config_name", args.model,
+        "--dataset", dataset,
+        "--optuna_params", "ultragcn_ml1m",
+        "--experiment_name", args.model + "_" + dataset,
+        "--num_trials", str(args.num_trials),
+        "--timeout", str(48 * 60 * 60),
     ]
 
     print("Running command:")
