@@ -1,0 +1,28 @@
+# GASATF для разреженных датасетов
+# ciao_dvd, ratings_*, amazon_ratings_cds/grocery/kindle
+# Очень короткие истории (avg 1.5-8), очень много предметов (16K-1.6M)
+# max_positions: 30
+- name: max_positions
+  type: int
+  low: 50
+  high: 50
+- name: rank_u
+  type: int
+  low: 128
+  high: 2048
+  step: 128
+- name: rank_v
+  type: int
+  low: 64
+  high: 1024
+  step: 64
+- name: rank_w
+  type: int
+  low: 1
+  high: 4
+  step: 1
+- name: decay
+  type: float
+  log: false
+  low: 0.0
+  high: 1.5

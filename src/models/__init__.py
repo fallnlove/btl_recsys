@@ -10,6 +10,7 @@ from src.models.sgd_mf import MFSGD
 from src.models.lightgcn import LightGCN
 from src.models.random import RandomModel
 from src.models.pure_svd import PureSVDModel
+from src.models.gasatf import GASATF
 
 __all__ = [
     "PopularRandom",
@@ -25,4 +26,5 @@ __all__ = [
     "SeqKNN",
     "RandomModel",
     "PureSVDModel",
+    "GASATF",
 ]

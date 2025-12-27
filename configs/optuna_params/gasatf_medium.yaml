@@ -1,0 +1,28 @@
+# GASATF для средних датасетов
+# citeulike_a/t, amazon_ratings_baby, Sports_and_Outdoors, movietweetings
+# Средние истории (avg 10-40), много предметов (17K-6.7M)
+# max_positions: 100
+- name: max_positions
+  type: int
+  low: 100
+  high: 100
+- name: rank_u
+  type: int
+  low: 64
+  high: 1024
+  step: 64
+- name: rank_v
+  type: int
+  low: 32
+  high: 512
+  step: 32
+- name: rank_w
+  type: int
+  low: 2
+  high: 14
+  step: 4
+- name: decay
+  type: float
+  log: false
+  low: 0.0
+  high: 1.5

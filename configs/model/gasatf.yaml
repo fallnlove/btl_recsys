@@ -1,0 +1,16 @@
+_target_: src.models.GASATF
+name: GASATF
+triangle: lower
+decay: 1.0
+decay_mode: lin
+max_positions: 200
+growth_tol: 1e-6
+iters: 20
+tries: 3
+downvote_seen_items: true
+val_top_n: 20
+verbose: False
+rank_u: 100
+rank_v: 48
+rank_w: 11
+seed: 42
