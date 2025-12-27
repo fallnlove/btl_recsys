@@ -60,6 +60,11 @@ class UltraGCN(BaseModel, nn.Module):
         self.n_users = train_dataset.n_users
         self.n_items = train_dataset.n_items
 
+        self.seen_users = np.zeros(self.n_users, dtype=bool)
+        self.seen_users[np.unique(
+            train_dataset.get_coo_array().row.astype(np.int64)
+        )] = True
+
         self.user_embeddings = torch.nn.Embedding(
             num_embeddings=self.n_users,
             embedding_dim=self.embedding_dim,
@@ -137,7 +142,39 @@ class UltraGCN(BaseModel, nn.Module):
                 if self.early_stopping and no_improve_epochs >= 5:
                     break
 
-    @torch.no_grad()
+    def _partial_fit(self, _users, history_items):
+        torch.nn.init.xavier_uniform_(self.user_embeddings(_users))
+        self.train()
+        optimizer = torch.optim.AdamW(
+            params=self.user_embeddings.parameters(),
+            lr=self.lr,
+            weight_decay=self.lambda_reg,
+        )
+        mask = (history_items != -1)
+        count = mask.sum(dim=1)
+
+        dataset = TensorDataset(
+            _users.repeat_interleave(count).long(),
+            history_items[mask].reshape(-1).long(),
+        )
+        dataloader = DataLoader(dataset, batch_size=1024, shuffle=True)
+        for epoch in range(5):
+            for batch in dataloader:
+                users = batch[0].to(self.device)
+                pos_items = batch[1].to(self.device)
+                neg_items = torch.randint(0, self.n_items, (len(users), self.negative_num), device=self.device)
+
+                omega_weight = self.get_omegas(users, pos_items, neg_items)
+
+                loss_L = self.cal_loss_L(users, pos_items, neg_items, omega_weight)
+                loss_I = self.cal_loss_I(users, pos_items)
+
+                loss = loss_L + self.gamma * loss_I
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
     def predict(self, dataset, top_n: int) -> np.ndarray:
         """
         Make predictions on the given data.
@@ -151,7 +188,19 @@ class UltraGCN(BaseModel, nn.Module):
             user_embeds = self.user_embeddings(users)  # batch_size * dim
             all_item_embeds = self.item_embeddings.weight  # n_items * dim
 
-            scores = torch.matmul(user_embeds, all_item_embeds.T)  # batch_size * n_items
+            seen_users = self.seen_users[users.cpu().numpy()]
+            unseen_mask = ~torch.from_numpy(seen_users).to(self.device)
+            if unseen_mask.any():
+                unseen_users = users[unseen_mask]
+                unseen_hist = history[unseen_mask]
+                self._partial_fit(
+                    unseen_users,
+                    unseen_hist,
+                )
+                self.eval()
+
+            with torch.no_grad():
+                scores = torch.matmul(user_embeds, all_item_embeds.T)  # batch_size * n_items
 
             for i in range(len(users)):
                 scores[i, history[i, history[i] != -1]] = -np.inf

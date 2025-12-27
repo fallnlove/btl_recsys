@@ -1,6 +1,6 @@
 - name: embedding_dim
   type: int
-  low: 64
+  low: 32
   high: 512
   step: 32
 - name: w1
