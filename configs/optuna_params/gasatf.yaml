@@ -1,0 +1,33 @@
+- name: max_positions
+  type: int
+  low: 200
+  high: 200
+- name: rank_u
+  type: int
+  low: 128
+  high: 2048
+  step: 128
+- name: rank_v
+  type: int
+  low: 32
+  high: 1024
+  step: 32
+- name: rank_w
+  type: int
+  low: 2
+  high: 24
+  step: 2
+- name: decay
+  type: float
+  low: 0.0
+  high: 1.0
+  step: 0.1
+- name: scaling_factor
+  type: float
+  low: 0.0
+  high: 1.0
+  step: 0.1
+- name: rescaled
+  type: categorical
+  choices: [true, false]
+

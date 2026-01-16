@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: KGRec-Music
+url: https://disk.360.yandex.ru/d/cUBZLP_OoLankw?path=/KGRec-Music

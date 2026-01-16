@@ -9,8 +9,8 @@ from pathlib import Path
 @click.option("--filename", type=str)
 @click.option("--user_col", type=str, default="user_id")
 @click.option("--item_col", type=str, default="item_id")
-@click.option("--time_col", type=str, default=None)
-@click.option("--rating_col", type=str, default=None)
+@click.option("--time_col", type=str, default="timestamp")
+@click.option("--rating_col", type=str, default="rating")
 def main(filename, user_col, item_col, time_col, rating_col):
     subprocess.run([
         "python",

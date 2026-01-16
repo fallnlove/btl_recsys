@@ -1,5 +1,5 @@
 defaults:
-  - dataset: movielens
+  - dataset: MovieLens-1M
   - model: gasatf
   - metrics: base
   - _self_

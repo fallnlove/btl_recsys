@@ -22,12 +22,13 @@ def main(
         filename,
         engine="python",
     )
-    if time_col is None:
-        df['timestamp'] = np.random.randint(1, 1_000_000_000, size=len(df))
-        time_col = 'timestamp'
+    if time_col is None or time_col not in df.columns:
+        df["timestamp"] = np.random.randint(1, 1_000_000_000, size=len(df))
+        time_col = "timestamp"
+        
     if rating_col is not None:
-        df[rating_col] = 1
-        rating_col = 'rating'
+        df["rating"] = 1
+        rating_col = "rating"
 
     df["user_id"], _ = pd.factorize(df[user_col])
     df["item_id"], _ = pd.factorize(df[item_col])

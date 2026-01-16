@@ -109,9 +109,11 @@ class Objective:
 @click.option("--dataset", "-ds", type=str)
 @click.option("--optuna_params", "-op", type=str)
 @click.option("--experiment_name", "-en", type=str)
-@click.option("--timeout", "-to", type=float, default=4 * 60 * 60)
-@click.option("--num_trials", "-nt", default=None, type=int)
+@click.option("--timeout", "-to", type=float, default=4800 * 60 * 60)
+@click.option("--num_trials", "-nt", default=200, type=int)
 @click.option("--verbose", "-v", is_flag=True, default=False)
+@click.option('--multivariate', '-mv', is_flag=True, default=False)
+@click.option('--n_startup_trials', '-nst', default=20, type=int)
 def main(
     config_name: str,
     dataset: str,
@@ -120,6 +122,8 @@ def main(
     timeout: float,
     num_trials: int,
     verbose: bool,
+    multivariate: bool,
+    n_startup_trials: int
 ):
     out_dir = Path(OPTUNA_DIR) / experiment_name
     tmp_dir = out_dir / "tmp"
@@ -144,7 +148,7 @@ def main(
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=TPESampler(n_startup_trials=10),
+        sampler=TPESampler(n_startup_trials=n_startup_trials, multivariate=multivariate),
         study_name=experiment_name,
         storage=JournalStorage(
             JournalFileBackend(file_path=str(out_dir / f"./{experiment_name}.log"))

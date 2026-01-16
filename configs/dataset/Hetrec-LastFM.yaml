@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: Hetrec-LastFM
+url: https://disk.360.yandex.ru/d/cUBZLP_OoLankw?path=/Hetrec-LastFM

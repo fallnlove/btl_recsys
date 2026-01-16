@@ -11,7 +11,12 @@ from src.utils.download import download
 
 
 class RecSysDataset(Dataset):
-    def __init__(self, name: str, url: str, split: str = "train", merge_train_val: bool = False):
+    def __init__(self, 
+                 name: str, 
+                 url: str, 
+                 split: str, 
+                 merge_train_val: bool,
+                 holdout_filename: str = ""):
         assert split in ["train", "val", "test"], "Split must be one of 'train', 'val', or 'test'."
         assert not (merge_train_val and split == "val"), "You cannot use validation split when merging train and val sets."
         self._split = split
@@ -36,18 +41,18 @@ class RecSysDataset(Dataset):
         if split == "train":
             self._df = self._df_train
         elif split == "val":
-            holdout_path = folder / "holdout_validation.csv"
+            holdout_path = folder / holdout_filename
             self._df = pd.concat(
                 [self._df_train, self._df_val],
                 ignore_index=True
             ).sort_values(by=["timestamp"])
         elif split == "test":
-            holdout_path = folder / "holdout_test.csv"
+            holdout_path = folder / holdout_filename
             self._df = pd.concat(
                 [self._df_train, self._df_val, self._df_test],
                 ignore_index=True
             ).sort_values(by=["timestamp"])
-
+        
         if split in ["val", "test"]:
             self._holdout_df = pd.read_csv(holdout_path)
             self.delete_holdout_items()

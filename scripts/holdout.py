@@ -8,11 +8,11 @@ import pandas as pd
 
 def main(
     data_path,
+    random_states=[],
     user_col="user_id",
     item_col="item_id",
     timestamp_col="timestamp",
-    holdout_type="random",
-    random_state=42,
+    holdout_type="custom",
 ):
     data_path = Path(data_path)
     print(f"Loading data from: {data_path}")
@@ -25,24 +25,36 @@ def main(
     elif holdout_type == "last":
         validation = data_val.groupby(user_col).last().reset_index()
         test = data_test.groupby(user_col).last().reset_index()
-    elif holdout_type == "random":
-        validation = data_val.groupby(user_col).sample(n=1, random_state=random_state).reset_index(drop=True)
-        test = data_test.groupby(user_col).sample(n=1, random_state=random_state).reset_index(drop=True)
+    elif holdout_type == "custom":
+        validation = data_val.groupby(user_col).tail(n=1).reset_index(drop=True)
+        tests = [data_test.groupby(user_col).sample(n=1, random_state=random_state).reset_index(drop=True) for random_state in random_states]
     else:
         raise ValueError(f"Unknown holdout type: {holdout_type}")
 
     validation_path = data_path / "holdout_validation.csv"
-    test_path = data_path / "holdout_test.csv"
 
     validation.to_csv(validation_path, index=False)
-    test.to_csv(test_path, index=False)
+    if holdout_type != "custom":
+        test_path = data_path / "holdout_test_0.csv"
+        test.to_csv(test_path, index=False)
+    else:
+        for i, _test in enumerate(tests):
+            _test.to_csv(data_path / f"holdout_test_{i}.csv", index=False)
 
     print("\Holdout complete!")
     print(
         f"Val: {len(validation)} holdout items, {validation[user_col].nunique()} users"
     )
-    print(f"Test: {len(test)} holdout items, {test[user_col].nunique()} users")
-
+    if holdout_type != "custom":
+        print(
+            f"Test: {len(test)} holdout items, {test[user_col].nunique()} users"
+        )
+    else:
+        for i, _test in enumerate(tests):
+            print(
+                f"Test {i}: {len(_test)} holdout items, {_test[user_col].nunique()} users"
+            )
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -80,16 +92,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--holdout_type",
         type=str,
-        default="random",
-        choices=["random", "first", "last"],
-        help="Type of holdout strategy: random / first / last (default: random)",
+        default="custom",
+        choices=["custom", "first", "last"],
+        help="Type of holdout strategy: custom / first / last (default: custom)",
     )
 
     parser.add_argument(
-        "--random_state",
+        "--random_states",
         type=int,
-        default=42,
-        help="Random seed for reproducibility (default: 42)",
+        nargs="+",
+        default=[42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
+        help="List of random seeds (default: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51])",
     )
 
     args = parser.parse_args()
@@ -100,5 +113,5 @@ if __name__ == "__main__":
         item_col=args.item_col,
         timestamp_col=args.timestamp_col,
         holdout_type=args.holdout_type,
-        random_state=args.random_state,
+        random_states=args.random_states,
     )

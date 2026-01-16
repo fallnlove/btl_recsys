@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: MovieLens-100K
+url: https://disk.360.yandex.ru/d/cUBZLP_OoLankw?path=/MovieLens-100K

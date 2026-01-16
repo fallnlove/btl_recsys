@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: GoogleLocal2021-Rhode-Island
+url: https://disk.360.yandex.ru/d/cUBZLP_OoLankw?path=/GoogleLocal2021-Rhode-Island

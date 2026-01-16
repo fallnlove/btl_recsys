@@ -2,11 +2,11 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from numba import njit, prange
 from numba.typed import List as NumbaList
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.linalg import solve_triangular
 from abc import ABC
-
+import time
+from sklearn.utils.extmath import randomized_svd
 from src.base import BaseModel
 from src.metrics import NDCGMetric
 
@@ -28,24 +28,9 @@ def _tensordot2_par(idx, val, u, v, mode1, mode2, unqs, inds, res):
                 for j2 in range(r2):
                     res[i0, j1, j2] += tmp * v[i2, j2]
 
-
 def tensordot2_par(idx, val, shape, u, v, contraction_modes, unqs, inds, dtype=np.float64):
     """
     Tensor dot product along two modes (parallel version).
-    
-    Parameters:
-    -----------
-    idx : array (N, 3) - tensor indices
-    val : array (N,) - tensor values
-    shape : tuple - tensor shape
-    u, v : arrays - factor matrices
-    contraction_modes : list of tuples [(mode, axis), (mode, axis)]
-    unqs, inds : arranged indices for the target mode
-    dtype : output dtype
-    
-    Returns:
-    --------
-    result : array of shape (dim_target, r1, r2)
     """
     mode1, _ = contraction_modes[0]
     mode2, _ = contraction_modes[1]
@@ -64,44 +49,6 @@ def tensordot2_par(idx, val, shape, u, v, contraction_modes, unqs, inds, dtype=n
     
     return res
 
-
-@njit(parallel=True, nogil=True)
-def _core_norm_squared(idx, val, U, V, W, unqs, inds, dtype=np.float64):
-    ru = U.shape[1]
-    rv = V.shape[1]
-    rw = W.shape[1]
-    n = len(unqs)
-    
-    local_norms = np.zeros(n, dtype=dtype)
-    
-    for s in prange(n):
-        i2 = unqs[s]
-        ul = inds[s]
-        
-        local_core = np.zeros((ru, rv), dtype=dtype)
-        
-        for pos in ul:
-            i0 = idx[pos, 0]
-            i1 = idx[pos, 1]
-            vp = val[pos]
-            w_vec = W[i2, :]
-            
-            for i in range(ru):
-                u_val = vp * U[i0, i]
-                for j in range(rv):
-                    for k in range(rw):
-                        local_core[i, j] += u_val * V[i1, j] * w_vec[k]
-        
-        local_norm_sq = 0.0
-        for i in range(ru):
-            for j in range(rv):
-                local_norm_sq += local_core[i, j] * local_core[i, j]
-        
-        local_norms[s] = local_norm_sq
-    
-    return np.sum(local_norms)
-
-
 @njit
 def fill_missing_sorted(arr, inds, size):
     filler = inds[0][0:0]
@@ -117,15 +64,11 @@ def fill_missing_sorted(arr, inds, size):
         arr_filled[i] = i
     return arr_filled, inds_filled
 
-# numba at least up to v0.50.1 only supports the 1st argument of np.unique
-# https://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
 def arrange_index(array, typed=True, size=None):
-    '''Mainly used in Tucker decomposition calculations. Enables parallelism.
-    '''
     unqs, unq_inv, unq_cnt = np.unique(array, return_inverse=True, return_counts=True)
     inds = np.split(np.argsort(unq_inv), np.cumsum(unq_cnt[:-1]))
 
-    if typed:  # reflected lists are being deprecated in numba - switch to typed lists by default
+    if typed:
         inds_typed = NumbaList()
         for ind in inds:
             inds_typed.append(ind)
@@ -164,13 +107,14 @@ def arrange_indices(idx, mode_mask=None, shape=None):
     return res
 
 
-
 class TensorBasedModel(ABC):
     
     def __init__(self):
         self.V = None
         self.W = None
         self.A = None
+        self.d = None
+        self.inv_d = None
         self.attention_vector = None
     
     @staticmethod
@@ -189,66 +133,6 @@ class TensorBasedModel(ABC):
         tmp = (A @ W) @ w_hat_last
         self.attention_vector = self._shift_vector_last(tmp)
         return self.attention_vector
-    
-
-def generate_sequential_tensor(dataset, max_positions: int = 100, dtype=np.float64):
-    """
-    Generate binary tensor data (user, item, position) from dataset.
-    Returns idx (N, 3), val (N,), shape tuple.
-    """
-    user_idx_all = []
-    item_idx_all = []
-    position_idx_all = []
-    
-    dataloader = dataset.get_dataloader(batch_size=8192, shuffle=False)
-
-    for batch in dataloader:
-        history = batch["history"].numpy().astype(np.int64)
-        batch_users = batch['user_id'].numpy().astype(np.int64)
-        n_users_batch, max_len = history.shape
-
-        raw_mask = history != -1
-        if not raw_mask.any():
-            continue
-
-        lengths = raw_mask.sum(axis=1)
-
-        pos_grid = np.arange(max_len, dtype=np.int64)[None, :]
-        
-        dist_from_end = (lengths[:, None] - 1) - pos_grid
-        pos_aligned = (max_positions - 1) - dist_from_end
-
-        valid_mask = raw_mask & (pos_aligned >= 0)
-
-        if not valid_mask.any():
-            continue
-
-        pos_idx = pos_aligned[valid_mask].ravel()
-        item_idx = history[valid_mask].ravel()
-        
-        user_idx_matrix = np.broadcast_to(batch_users[:, None], history.shape)
-        user_idx = user_idx_matrix[valid_mask].ravel()
-
-        user_idx_all.append(user_idx)
-        item_idx_all.append(item_idx)
-        position_idx_all.append(pos_idx)
-
-
-
-    user_idx = np.concatenate(user_idx_all)
-    item_idx = np.concatenate(item_idx_all)
-    position_idx = np.concatenate(position_idx_all)
-
-    n_users = dataset.n_users
-    n_items = dataset.n_items
-    n_positions = max_positions
-
-    idx = np.column_stack((user_idx, item_idx, position_idx))
-    val = np.ones(len(idx), dtype=dtype)  # Binary feedback
-    shape = (n_users, n_items, n_positions)
-    
-    return idx, val, shape
-
 
 class AttentionBuilder:
 
@@ -308,7 +192,63 @@ class AttentionBuilder:
             A = A / s
 
         return A
+
+def generate_sequential_tensor(dataset, 
+                               max_positions: int = 100, 
+                               dtype=np.float64):
+    user_idx_all = []
+    item_idx_all = []
+    position_idx_all = []
     
+    dataloader = dataset.get_dataloader(batch_size=2048, shuffle=False)
+
+    for batch in dataloader:
+        history = batch["history"].numpy().astype(np.int64)
+        batch_users = batch['user_id'].numpy().astype(np.int64)
+        n_users_batch, max_len = history.shape
+
+        raw_mask = history != -1
+        if not raw_mask.any():
+            continue
+
+        lengths = raw_mask.sum(axis=1)
+
+        pos_grid = np.arange(max_len, dtype=np.int64)[None, :]
+        dist_from_end = (lengths[:, None] - 1) - pos_grid
+        pos_aligned = (max_positions - 1) - dist_from_end
+
+        valid_mask = raw_mask & (pos_aligned >= 0)
+
+        if not valid_mask.any():
+            continue
+
+        pos_idx = pos_aligned[valid_mask].ravel()
+        item_idx = history[valid_mask].ravel()
+        
+        user_idx_matrix = np.broadcast_to(batch_users[:, None], history.shape)
+        user_idx = user_idx_matrix[valid_mask].ravel()
+
+        user_idx_all.append(user_idx)
+        item_idx_all.append(item_idx)
+        position_idx_all.append(pos_idx)
+
+    if not user_idx_all:
+         raise ValueError("No valid interactions found in dataset.")
+
+    user_idx = np.concatenate(user_idx_all)
+    item_idx = np.concatenate(item_idx_all)
+    position_idx = np.concatenate(position_idx_all)
+
+    n_users = dataset.n_users
+    n_items = dataset.n_items
+    n_positions = max_positions
+
+    idx = np.column_stack((user_idx, item_idx, position_idx))
+    val = np.ones(len(idx), dtype=dtype) 
+    shape = (n_users, n_items, n_positions)
+    
+    return idx, val, shape
+
 
 class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
 
@@ -329,6 +269,8 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
                  name: str = "GA-SATF",
                  dtype=np.float32,
                  downvote_seen_items: bool = True,
+                 scaling_factor: float = 0.0,
+                 rescaled: bool = False,
                  **kwargs
                  ):
         BaseModel.__init__(self, name)
@@ -341,10 +283,7 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         self.dtype = np.dtype(dtype)
         self.verbose = verbose
         self.seed = seed
-        if seed is not None:
-            self.rng = np.random.RandomState(seed)
-        else:
-            self.rng = np.random
+        self.rng = np.random if seed is None else np.random.RandomState(seed)
         
         self.triangle = triangle
         self.decay_mode = decay_mode
@@ -356,6 +295,9 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         self.downvote_seen_items = downvote_seen_items
         self.val_top_n = val_top_n
         
+        self.scaling_factor = scaling_factor
+        self.rescaled = rescaled
+        
         self.idx = None
         self.val = None
         self.shape = None
@@ -363,16 +305,30 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         self.ttm = None
 
     def core_norm(self, U, V, W):
-        """Compute Frobenius norm of the core tensor."""
-        unqs, inds = self.index_data[2]
-        norm_sq = _core_norm_squared(self.idx, self.val, U, V, W, unqs, inds, dtype=self.dtype)
-        return np.sqrt(norm_sq)
+        core_norm = np.linalg.norm(self.compute_core(U, V, W))**2
+        return core_norm
+
+    def compute_core(self, U, V, W):
+        ru, rv, rw = U.shape[1], V.shape[1], W.shape[1]
+        
+        V_weighted = V * self.d[:, None]
+        
+        M = self.ttm[2](
+            self.idx, self.val, self.shape,
+            U, V_weighted,
+            [(0, 0), (1, 0)],
+            *self.index_data[2],
+        )
+
+        M_mat = M.reshape(W.shape[0], ru * rv, order='C')
+        AW = self.A @ W
+        M_mat = AW.T @ M_mat
+
+        core = M_mat.reshape(rw, ru, rv, order='C').transpose(1, 2, 0)
+        print(f'compute core: done')
+        return core
 
     def fit_rank(self, core_shape, growth_tol=1e-6, iters=100, tries=5, val_callback=None):
-        """Run ALS iterations to fit factor matrices.
-        
-        Stops when val_callback metric growth falls below growth_tol.
-        """
         ranks = core_shape
         dims = self.shape
 
@@ -390,23 +346,26 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         tries_left = tries
         best_sweep = 0
 
+        if self.rescaled and self.d is not None:
+            d_vec = self.d[:, None]
+        else:
+            d_vec = np.ones((dims[1], 1), dtype=self.dtype)
+
         for sweep in range(1, iters + 1):
             if self.verbose:
                 print(f"Sweep {sweep}/{iters}")
 
             AW = self.A @ factors[2]
 
-            # Update U
             matrix = self.ttm[0](
                 self.idx, self.val, self.shape,
-                factors[1], AW,
+                factors[1] * d_vec, AW,
                 [(1, 0), (2, 0)],
                 *self.index_data[0],
                 dtype=self.dtype
             ).reshape(dims[0], ranks[1] * ranks[2], order='C')
             factors[0] = self._svd_basis(matrix, ranks[0])
             
-            # Update V
             matrix = self.ttm[1](
                 self.idx, self.val, self.shape,
                 factors[0], AW, 
@@ -414,43 +373,57 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
                 *self.index_data[1],
                 dtype=self.dtype
             ).reshape(dims[1], ranks[0] * ranks[2], order='C')
-            factors[1] = self._svd_basis(matrix, ranks[1])
+            factors[1] = self._svd_basis(d_vec * matrix, ranks[1])
 
-            # Update W
             matrix = self.ttm[2](
                 self.idx, self.val, self.shape,
-                factors[0], factors[1],
+                factors[0], factors[1] * d_vec,
                 [(0, 0), (1, 0)],
                 *self.index_data[2],
                 dtype=self.dtype
             ).reshape(dims[2], ranks[0] * ranks[1], order='C')
+            
             matrix = self.A.T @ matrix
             factors[2] = self._svd_basis(matrix, ranks[2])
 
-            # Check convergence via callback
-            metric = val_callback(factors)
-            
-            if self.verbose:
-                print(f'Metric: {metric:.6f}, best: {best_metric:.6f}')
-            
-            if best_metric != -np.inf:
-                growth = (metric - best_metric) / max(abs(best_metric), 1e-12)
-                if growth < growth_tol:
-                    tries_left -= 1
-                    if tries_left == 0:
+            if val_callback is not None:
+                metric = val_callback(factors)
+                if self.verbose:
+                    print(f'Metric: {metric:.6f}, best: {best_metric:.6f}')
+                
+                if best_metric != -np.inf:
+                    growth = (metric - best_metric) / max(abs(best_metric), 1e-12)
+                    if growth < growth_tol:
+                        tries_left -= 1
+                        if tries_left == 0:
+                            if self.verbose:
+                                print(f"Converged after {sweep} sweeps")
+                            break
+                    else:
+                        tries_left = tries
+                
+                if metric > best_metric:
+                    best_metric = metric
+                    best_sweep = sweep
+                    for m in range(3):
+                        best_factors[m] = factors[m].copy()
+            else:
+                current_norm = self.core_norm(factors[0], factors[1], factors[2])
+                if self.verbose:
+                    print(f"Core Norm: {current_norm:.6f}")
+                if best_metric != -np.inf:
+                    growth = (current_norm - best_metric) / max(abs(best_metric), 1e-12)
+                    if growth < growth_tol:
                         if self.verbose:
                             print(f"Converged after {sweep} sweeps")
                         break
-                else:
-                    tries_left = tries
                     if self.verbose:
-                        print(f'Growth: {growth:.6f}')
-            
-            if metric > best_metric:
-                best_metric = metric
+                        print(f"Growth: {growth:.6f}")
+                best_metric = current_norm
                 best_sweep = sweep
                 for m in range(3):
                     best_factors[m] = factors[m].copy()
+                
 
         return best_factors, best_sweep
     
@@ -464,21 +437,26 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         return True
     
     def fit(self, train_dataset, val_dataset=None):
-        """Fit the model using the dataset."""
         if not self.validate_rank():
             self.V = None
             self.W = None
             return
-        self._val_dataset = val_dataset  # Store for validation
         
-        # Generate tensor from dataset
         self.idx, self.val, self.shape = generate_sequential_tensor(
             train_dataset,
             max_positions=self.max_positions,
             dtype=self.dtype
-        )
+        )   
         
-        # Build attention matrix
+        if self.rescaled:
+            item_pops = np.bincount(self.idx[:, 1].astype(np.int64), minlength=self.shape[1]).astype(self.dtype)
+            item_pops[item_pops == 0] = 1
+            self.d = np.power(item_pops, (self.scaling_factor - 1.0) / 2.0).astype(self.dtype)
+            self.inv_d = (1.0 / self.d).astype(self.dtype)
+        else:
+            self.d = np.ones(self.shape[1], dtype=self.dtype)
+            self.inv_d = np.ones(self.shape[1], dtype=self.dtype)
+
         self.A = self.build_attention_matrix(
             self.max_positions,
             decay_factor=self.decay,
@@ -494,18 +472,18 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         core_shape = (self.rank_u, self.rank_v, self.rank_w)
         
         if val_dataset is not None:
-            metric = NDCGMetric(self.val_top_n)
-            holdout_users = val_dataset.get_holdout_users()
-            holdout_items = val_dataset.get_holdout_array()
-            
+
             def val_callback(factors):
                 self.V = factors[1]
                 self.W = factors[2]
+                metric = NDCGMetric(self.val_top_n)
+                holdout_users = val_dataset.get_holdout_users()
+
                 predictions = self.predict(val_dataset, self.val_top_n)
-                return metric(predictions[holdout_users, :], holdout_items[holdout_users])
+                return metric(predictions[holdout_users, :], 
+                              val_dataset.get_holdout_array()[holdout_users])
         else:
-            def val_callback(factors):
-                return self.core_norm(factors[0], factors[1], factors[2])
+            val_callback = None
         
         best_factors, sweeps = self.fit_rank(
             core_shape, 
@@ -522,9 +500,9 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         return self
     
     def predict(self, dataset, top_n: int) -> np.ndarray:
-        """Make predictions on the given dataset."""
         if self.V is None or self.W is None:
             return np.tile(np.arange(top_n, dtype=np.int32), (dataset.n_users, 1))
+        
         num_users = dataset.n_users
         num_items = dataset.n_items
         
@@ -561,18 +539,21 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
             
             weights = att_vector[positions]
             
+            if self.rescaled and self.d is not None:
+                weights *= self.d[item_idx]
+            
             M_batch = csr_matrix(
                 (weights, (row_idx, item_idx)),
                 shape=(n_users_batch, num_items)
             )
             
-            # Compute scores: (M @ V) @ V.T
             scores_batch = (M_batch @ self.V) @ self.V.T
             
-     
+            if self.rescaled and self.inv_d is not None:
+                scores_batch *= self.inv_d[None, :]
+
             if self.downvote_seen_items:
                 min_val = scores_batch.min() - self.dtype.type(1)
-     
                 if raw_mask.any():
                     seen_items = history[raw_mask].ravel()
                     seen_rows = np.repeat(np.arange(n_users_batch), lengths)
@@ -589,19 +570,15 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         
         return recoms_all
 
-    
     def save_checkpoint(self, path: str):
-        """Save the model checkpoint."""
         pass
     
     def load_checkpoint(self, path: str):
-        """Load the model checkpoint."""
         pass
 
     def _svd_basis(self, mat, rank):
         n_iter = 2
         oversample = 12
-        
         h, w = mat.shape
         k = rank + oversample
         
@@ -609,23 +586,20 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
             U, _, _ = np.linalg.svd(mat, full_matrices=False)
             return U[:, :rank].astype(self.dtype, copy=False)
         
+        if h * w <= 10**9:
+             U, _, _ = randomized_svd(mat, n_components=rank, random_state=self.rng)
+             return U.astype(self.dtype, copy=False)
+
         Omega = self.rng.randn(w, k).astype(self.dtype, copy=False)
-
         Y = mat @ Omega
-
         for _ in range(n_iter):
             Y = mat @ (mat.T @ Y)
-
         Q, _ = np.linalg.qr(Y) 
         B = Q.T @ mat
-
         U_hat, _, _ = np.linalg.svd(B, full_matrices=False)
-
         U = Q @ U_hat[:, :rank]
-
         return U.astype(self.dtype, copy=False)
 
     def _qr_basis(self, mat, rank):
         Q, _ = np.linalg.qr(mat, mode='reduced')
         return Q.astype(self.dtype, copy=False)
-

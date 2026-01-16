@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: Amazon2014-Amazon-Instant-Video
+url: https://disk.360.yandex.ru/d/cUBZLP_OoLankw?path=/Amazon2014-Amazon-Instant-Video

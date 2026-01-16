@@ -1,29 +1,53 @@
 import requests
 import urllib.parse
-import shutil
 import os
 import pathlib
 
 def download(link, download_location):
-    #  Code from https://github.com/SecFathy/YandexDown/blob/main/YandexCLI.py
     download_location = pathlib.Path(download_location)
     if download_location.exists():
+        print(f"file {download_location} already exists")
         return
 
-    url = f"https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key={link}"
-    response = requests.get(url)
-    download_url = response.json()["href"]
-    file_name = urllib.parse.unquote(download_url.split("filename=")[1].split("&")[0])
-    save_path = os.path.join(download_location.parent, file_name)
+    base_api_url = "https://cloud-api.yandex.net/v1/disk/public/resources/download"
+    
+    parsed_link = urllib.parse.urlparse(link)
+    query_params = urllib.parse.parse_qs(parsed_link.query)
+    
+    public_key = f"{parsed_link.scheme}://{parsed_link.netloc}{parsed_link.path}"
+    
+    api_params = {'public_key': public_key}
+    
+    if 'path' in query_params:
+        api_params['path'] = query_params['path'][0]
 
-    with open(save_path, "wb") as file:
-        download_response = requests.get(download_url, stream=True)
-        for chunk in download_response.iter_content(chunk_size=1024):
-            if chunk:
-                file.write(chunk)
-                file.flush()
+    final_url = f"{base_api_url}?{urllib.parse.urlencode(api_params)}"
+    response = requests.get(final_url)
+    
+    if response.status_code != 200:
+        print(f"API error: {response.status_code} for {link}")
+        return
 
-    if save_path.endswith(".zip"):
+    download_url = response.json().get("href")
+    
+    try:
+        file_name = urllib.parse.unquote(download_url.split("filename=")[1].split("&")[0])
+    except IndexError:
+        file_name = api_params.get('path', 'downloaded_file').strip("/")
+
+    save_path = download_location.parent / file_name
+    
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print(f"Download: {file_name}")
+    with requests.get(download_url, stream=True) as r:
+        r.raise_for_status()
+        with open(save_path, "wb") as file:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    file.write(chunk)
+    
+    if save_path.suffix == ".zip":
         import zipfile
         with zipfile.ZipFile(save_path, 'r') as zip_ref:
             zip_ref.extractall(download_location.parent)
