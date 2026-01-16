@@ -38,6 +38,16 @@ python3 scripts/dataset_pipeline.py --filename <path_to_csv>
 --rating_col <name_of_rating_column>
 ```
 
+### parse_datasets_yd
+
+Use this script to download raw CSVs from Yandex Disk, build splits, and generate dataset configs:
+
+```bash
+python3 parse_datasets_yd.py --splits_public_url <public_folder_with_splits>
+```
+
+After the pipeline finishes, upload the resulting split folders to disk and make the folder public. Then pass that public folder URL via `--splits_public_url` so the generated configs point to the correct location.
+
 ## Training
 
 To train a model with a specific configuration, use the following command.  
