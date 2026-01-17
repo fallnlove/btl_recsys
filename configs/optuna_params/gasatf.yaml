@@ -1,16 +1,17 @@
 - name: max_positions
   type: int
-  low: 200
+  low: 100
   high: 200
+  step: 100
 - name: rank_u
   type: int
-  low: 128
-  high: 2048
+  low: 8
+  high: 2056
   step: 128
 - name: rank_v
   type: int
-  low: 32
-  high: 1024
+  low: 8
+  high: 1032
   step: 32
 - name: rank_w
   type: int

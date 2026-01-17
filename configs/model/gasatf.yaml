@@ -8,7 +8,7 @@ growth_tol: 1e-3
 iters: 20
 tries: 3
 downvote_seen_items: true
-verbose: True
+verbose: False
 rank_u: 0
 rank_v: 0
 rank_w: 0

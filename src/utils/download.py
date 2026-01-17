@@ -2,12 +2,18 @@ import requests
 import urllib.parse
 import os
 import pathlib
+import shutil
 
-def download(link, download_location):
+def download(link, download_location, force_download: bool = False):
     download_location = pathlib.Path(download_location)
-    if download_location.exists():
+    if download_location.exists() and not force_download:
         print(f"file {download_location} already exists")
         return
+    if download_location.exists() and force_download:
+        if download_location.is_dir():
+            shutil.rmtree(download_location)
+        else:
+            download_location.unlink()
 
     base_api_url = "https://cloud-api.yandex.net/v1/disk/public/resources/download"
     

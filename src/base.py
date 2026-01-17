@@ -50,6 +50,14 @@ class BaseModel:
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
+    def suggest_additional_params(self) -> dict:
+        """
+        Suggest additional hyperparameters for the model after train with validation.
+        Returns:
+            dict: A dictionary of additional hyperparameters.
+        """
+        return {}
+
 
 class BaseMetric:
     """

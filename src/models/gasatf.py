@@ -407,23 +407,10 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
                     best_sweep = sweep
                     for m in range(3):
                         best_factors[m] = factors[m].copy()
-            else:
-                current_norm = self.core_norm(factors[0], factors[1], factors[2])
-                if self.verbose:
-                    print(f"Core Norm: {current_norm:.6f}")
-                if best_metric != -np.inf:
-                    growth = (current_norm - best_metric) / max(abs(best_metric), 1e-12)
-                    if growth < growth_tol:
-                        if self.verbose:
-                            print(f"Converged after {sweep} sweeps")
-                        break
-                    if self.verbose:
-                        print(f"Growth: {growth:.6f}")
-                best_metric = current_norm
-                best_sweep = sweep
-                for m in range(3):
-                    best_factors[m] = factors[m].copy()
-                
+        
+        if val_callback is None:
+            best_factors = factors
+            best_sweep = sweep
 
         return best_factors, best_sweep
     
@@ -575,6 +562,11 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
     
     def load_checkpoint(self, path: str):
         pass
+
+    def suggest_additional_params(self) -> dict:
+        if self.n_iters is None:
+            return {}
+        return {"iters": int(self.n_iters)}
 
     def _svd_basis(self, mat, rank):
         n_iter = 2

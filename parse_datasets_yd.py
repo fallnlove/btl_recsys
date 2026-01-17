@@ -1,13 +1,14 @@
 import argparse
 import os
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.parse import urlencode, quote
 
 import requests
 
 
-PUBLIC_FOLDER_URL = "https://disk.360.yandex.ru/d/9NnCsZwqRtGb8A"
+PUBLIC_FOLDER_URL = "https://disk.360.yandex.ru/d/_og7MLe5l6cP0w"
 SPLITS_PUBLIC_FOLDER_URL = "error, please set via cmd arg"
 TEMP_DATA_DIR = "data_parsed"
 CONFIGS_DATASET_DIR = Path("configs") / "dataset"
@@ -49,9 +50,15 @@ def process_dataset(filename) -> bool:
     
     if result.returncode == 0:
         print(f"Pipeline finished successfully for {filename}")
+        if result.stdout:
+            print(result.stdout)
         return True
     print(f"Error processing {filename}:")
-    print(result.stderr)
+    print(f"Return code: {result.returncode}")
+    if result.stderr:
+        print(result.stderr)
+    if result.stdout:
+        print(result.stdout)
     return False
 
 
@@ -95,23 +102,16 @@ def list_public_csv_items(public_key: str) -> list[dict]:
     return items
 
 
-def main_pipeline(splits_public_url: str):
-    os.makedirs(TEMP_DATA_DIR, exist_ok=True)
+def _handle_item(item: dict, splits_public_url: str) -> tuple[str, bool, str]:
+    dataset_name = item.get("name")
+    file_download_url = item.get("file")
+
+    if not dataset_name or not file_download_url:
+        msg = "Missing dataset name or download link, skipping."
+        print(msg)
+        return (dataset_name or "unknown", False, msg)
 
     try:
-        items = list_public_csv_items(PUBLIC_FOLDER_URL)
-    except Exception as e:
-        print(f"Yandex API Error: {e}")
-        return
-
-    for item in items:
-        dataset_name = item.get("name")
-        file_download_url = item.get("file")
-
-        if not dataset_name or not file_download_url:
-            print("Missing dataset name or download link, skipping.")
-            continue
-
         local_file_path = os.path.join(TEMP_DATA_DIR, dataset_name)
 
         download_file(file_download_url, local_file_path)
@@ -125,7 +125,55 @@ def main_pipeline(splits_public_url: str):
                 os.remove(local_file_path)
             except OSError:
                 pass
+            return (dataset_name, True, "Success")
+        else:
+            return (dataset_name, False, "Pipeline failed")
+    except Exception as e:
+        error_msg = f"Exception: {type(e).__name__}: {e}"
+        print(f"Error processing {dataset_name}: {error_msg}")
+        return (dataset_name, False, error_msg)
 
+
+def main_pipeline(splits_public_url: str, num_workers: int):
+    os.makedirs(TEMP_DATA_DIR, exist_ok=True)
+
+    try:
+        items = list_public_csv_items(PUBLIC_FOLDER_URL)
+    except Exception as e:
+        print(f"Yandex API Error: {e}")
+        return
+
+    results = []
+    if num_workers <= 1:
+        for item in items:
+            result = _handle_item(item, splits_public_url)
+            results.append(result)
+    else:
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = {
+                executor.submit(_handle_item, item, splits_public_url): item
+                for item in items
+            }
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as e:
+                    item = futures[future]
+                    name = item.get("name", "unknown")
+                    error_msg = f"Exception in worker: {type(e).__name__}: {e}"
+                    print(f"Error processing {name}: {error_msg}")
+                    results.append((name, False, error_msg))
+
+    print("\n" + "="*60)
+    print("Summary:")
+    successful = [r for r in results if r[1]]
+    failed = [r for r in results if not r[1]]
+    print(f"Total: {len(results)}, Successful: {len(successful)}, Failed: {len(failed)}")
+    if failed:
+        print("\nFailed datasets:")
+        for name, _, msg in failed:
+            print(f"  - {name}: {msg}")
     print("\nAll tasks completed!")
 
 
@@ -142,6 +190,12 @@ if __name__ == "__main__":
             "If omitted, uses YD_SPLITS_PUBLIC_URL or PUBLIC_FOLDER_URL."
         ),
     )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=1,
+        help="Number of parallel workers for download + processing.",
+    )
     args = parser.parse_args()
 
-    main_pipeline(args.splits_public_url)
+    main_pipeline(args.splits_public_url, args.num_workers)

@@ -1,0 +1,3 @@
+_target_: src.datasets.RecSysDataset
+name: ModCloth-Clothing-Fit
+url: https://disk.360.yandex.ru/d/cUBZLP_OoLankw?path=/ModCloth-Clothing-Fit

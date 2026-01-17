@@ -139,6 +139,15 @@ def run_train(cfg, verbose: bool = True, test_mode: bool = False):
         if verbose:
             logger.info(f"Holdout metrics: {json.dumps(holdout_metric_log, indent=2)}\n")
 
+    additional_cfg_params = {}
+    if not test_mode and hasattr(model, "suggest_additional_params"):
+        suggested = model.suggest_additional_params()
+        if isinstance(suggested, dict):
+            additional_cfg_params = suggested
+
+    if additional_cfg_params:
+        eval_metrics["additional_cfg_params"] = additional_cfg_params
+
     if verbose:
         logger.info(f"Final metrics: {json.dumps(eval_metrics, indent=2)}\n")
 
