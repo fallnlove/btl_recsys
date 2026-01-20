@@ -221,3 +221,4 @@ results
 *.old
 .python-version
 *.DS_Store
+sbatch/incomplete/
