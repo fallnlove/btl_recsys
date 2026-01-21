@@ -52,6 +52,7 @@ class UltraGCN(BaseModel, nn.Module):
         self.num_neighbors = num_neighbors
         self.early_stopping = early_stopping
         self.tracked_metric = tracked_metric
+        self.trained_epochs = None
 
     def fit(self, train_dataset, val_dataset):
         """
@@ -105,6 +106,7 @@ class UltraGCN(BaseModel, nn.Module):
         )
 
         for epoch in tqdm(range(self.num_epochs), desc="Training epochs"):
+            self.trained_epochs = epoch
             self.train()
             total_loss = 0.0
             for batch in dataloader:
@@ -127,7 +129,7 @@ class UltraGCN(BaseModel, nn.Module):
 
             avg_loss = total_loss / len(train_dataset)
 
-            if epoch >= 50 and epoch % 5 == 0:
+            if epoch >= 50 and epoch % 5 == 0 and val_dataset is not None:
                 holdout_users = val_dataset.get_holdout_users()
                 val_predictions = self.predict(val_dataset, top_n=20)[holdout_users]
                 val_targets = val_dataset.get_holdout_array()[holdout_users]
@@ -141,6 +143,10 @@ class UltraGCN(BaseModel, nn.Module):
 
                 if self.early_stopping and no_improve_epochs >= 5:
                     break
+
+    def suggest_additional_params(self) -> dict:
+        epochs = self.trained_epochs if self.trained_epochs else self.num_epochs
+        return {"num_epochs": int(epochs)}
 
     def _partial_fit(self, _users, history_items):
         torch.nn.init.xavier_uniform_(self.user_embeddings(_users))
