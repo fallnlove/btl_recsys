@@ -11,11 +11,12 @@ from src.models.lightgcn import LightGCN
 from src.models.random import RandomModel
 from src.models.pure_svd import PureSVDModel
 from src.models.gasatf import GASATF
+from src.models.als_implicit import ALS_Implicit
 
 __all__ = [
     "PopularRandom",
     "PopularRandom",
-    "ALSFM_sparse",
+    "ALSMF_sparse",
     "UltraGCN",
     "MFSGD",
     "LightGCN",
@@ -27,4 +28,5 @@ __all__ = [
     "RandomModel",
     "PureSVDModel",
     "GASATF",
+    "ALS_Implicit"
 ]

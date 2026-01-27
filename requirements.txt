@@ -102,3 +102,4 @@ wcwidth==0.2.14
 widgetsnbextension==4.0.15
 xxhash==3.6.0
 yarl==1.22.0
+implicit
