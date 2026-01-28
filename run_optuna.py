@@ -35,7 +35,14 @@ def suggest_cfg(config: DictConfig, trial: Trial) -> DictConfig:
     for param in config.optuna_params:
         name = param.name
         type_ = param.type
+        cond = param.get("condition", None)
 
+        if cond is not None:
+            cond_name = cond["name"]
+            cond_values = cond["values"]
+            if cond_name in trial.params and trial.params[cond_name] not in cond_values:
+                continue
+        
         if type_ == "categorical":
             value = trial.suggest_categorical(name, param.choices)
         elif type_ == "float":

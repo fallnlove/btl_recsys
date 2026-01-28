@@ -48,6 +48,16 @@ python3 parse_datasets_yd.py --splits_public_url <public_folder_with_splits>
 
 After the pipeline finishes, upload the resulting split folders to disk and make the folder public. Then pass that public folder URL via `--splits_public_url` so the generated configs point to the correct location.
 
+### build table results
+
+from project root
+
+```
+python3 ./scripts/collect_best_trials.py optuna_outputs --output-dir reports --downloa
+d-yd --yd-url https://disk.360.yandex.ru/d/s2EO4s76PDMybQ --algorithm-folders --force-download
+```
+
+
 ## Training
 
 To train a model with a specific configuration, use the following command.  
@@ -183,3 +193,4 @@ python3 sbatch/run.py \
 	--n_jobs "$N_JOBS" \
 	$( [ "$MULTIVARIATE" -eq 1 ] && echo "--multivariate" )
 ```
+
