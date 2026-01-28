@@ -53,8 +53,7 @@ After the pipeline finishes, upload the resulting split folders to disk and make
 from project root
 
 ```
-python3 ./scripts/collect_best_trials.py optuna_outputs --output-dir reports --downloa
-d-yd --yd-url https://disk.360.yandex.ru/d/s2EO4s76PDMybQ --algorithm-folders --force-download
+python3 ./scripts/collect_best_trials.py optuna_outputs --output-dir reports --download-yd --yd-url https://disk.360.yandex.ru/d/s2EO4s76PDMybQ --algorithm-folders --force-download
 ```
 
 

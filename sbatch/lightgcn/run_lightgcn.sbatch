@@ -4,16 +4,15 @@
 #SBATCH --output=logs/LightGCN_%A_%a.log
 #SBATCH --error=logs/LightGCN_%A_%a.err
 #SBATCH --array=66
-#SBATCH --time=96:00:00
+#SBATCH --time=48:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus=1
-#SBATCH --exclude=cn-043 
 
 
 MODEL="lightgcn"
 OPTUNA_PARAMS="lightgcn"
-NUM_TRIALS=600
-N_STARTUP_TRIALS=50
+NUM_TRIALS=200
+N_STARTUP_TRIALS=20
 N_JOBS=1
 MULTIVARIATE=0
 export HYDRA_FULL_ERROR=1
