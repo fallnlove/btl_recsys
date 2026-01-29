@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.base import BaseModel
 from src.metrics import Summarizer, NDCGMetric, RecallMetric, CoverageMetric
+from src.models.utils.repeatable_rec import is_repeatable
 
 
 class UltraGCN(BaseModel, nn.Module):
@@ -208,8 +209,9 @@ class UltraGCN(BaseModel, nn.Module):
             with torch.no_grad():
                 scores = torch.matmul(user_embeds, all_item_embeds.T)  # batch_size * n_items
 
-            for i in range(len(users)):
-                scores[i, history[i, history[i] != -1]] = -np.inf
+            if not is_repeatable(dataset):
+                for i in range(len(users)):
+                    scores[i, history[i, history[i] != -1]] = -np.inf
 
             _, top_items = torch.topk(scores, top_n, dim=-1)  # batch_size * top_n
 
