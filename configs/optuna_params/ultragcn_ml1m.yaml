@@ -27,7 +27,7 @@
   type: int
   low: 5
   high: 500
-  step: 
+  step: 10
 - name: negative_num
   type: int
   low: 5
