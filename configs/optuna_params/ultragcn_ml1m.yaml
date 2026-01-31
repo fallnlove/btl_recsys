@@ -25,14 +25,14 @@
   high: 1
 - name: negative_weight
   type: int
-  low: 50
+  low: 5
   high: 500
-  step: 50
+  step: 
 - name: negative_num
   type: int
-  low: 50
+  low: 5
   high: 500
-  step: 50
+  step: 10
 - name: gamma
   type: float
   log: true
