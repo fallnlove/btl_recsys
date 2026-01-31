@@ -195,16 +195,21 @@ class UltraGCN(BaseModel, nn.Module):
             user_embeds = self.user_embeddings(users)  # batch_size * dim
             all_item_embeds = self.item_embeddings.weight  # n_items * dim
 
-            seen_users = self.seen_users[users.cpu().numpy()]
-            unseen_mask = ~torch.from_numpy(seen_users).to(self.device)
-            if unseen_mask.any():
-                unseen_users = users[unseen_mask]
-                unseen_hist = history[unseen_mask]
-                self._partial_fit(
-                    unseen_users,
-                    unseen_hist,
-                )
-                self.eval()
+            # seen_users = self.seen_users[users.cpu().numpy()]
+            # unseen_mask = ~torch.from_numpy(seen_users).to(self.device)
+            # if unseen_mask.any():
+            #     unseen_users = users[unseen_mask]
+            #     unseen_hist = history[unseen_mask]
+                # self._partial_fit(
+                #     unseen_users,
+                #     unseen_hist,
+                # )
+                # self.eval()
+            self._partial_fit(
+                users,
+                history,
+            )
+            self.eval()
 
             with torch.no_grad():
                 scores = torch.matmul(user_embeds, all_item_embeds.T)  # batch_size * n_items
