@@ -186,6 +186,7 @@ class UltraGCN(BaseModel, nn.Module):
         """
         Make predictions on the given data.
         """
+        user_embeddings = self.user_embeddings.weight.clone().detach()
         self.eval()
         result = np.zeros((dataset.n_users, top_n), dtype=np.int64)
 
@@ -221,6 +222,9 @@ class UltraGCN(BaseModel, nn.Module):
             _, top_items = torch.topk(scores, top_n, dim=-1)  # batch_size * top_n
 
             result[users.cpu().numpy(), :] = top_items.cpu().numpy()
+
+        self.user_embeddings.weight.data.copy_(user_embeddings)
+        self.user_embeddings.weight.requires_grad_(True)
 
         return result
 
