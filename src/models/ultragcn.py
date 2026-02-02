@@ -63,41 +63,29 @@ class UltraGCN(BaseModel, nn.Module):
         self.n_items = train_dataset.n_items
 
         self.seen_users = np.zeros(self.n_users, dtype=bool)
-        self.seen_users[np.unique(
-            train_dataset.get_coo_array().row.astype(np.int64)
-        )] = True
+        self.seen_users[np.unique(train_dataset.get_coo_array().row.astype(np.int64))] = True
 
-        self.user_embeddings = torch.nn.Embedding(
-            num_embeddings=self.n_users,
-            embedding_dim=self.embedding_dim,
-        ).to(self.device)
-        self.item_embeddings = torch.nn.Embedding(
-            num_embeddings=self.n_items,
-            embedding_dim=self.embedding_dim,
-        ).to(self.device)
+        self.user_embeddings = torch.nn.Embedding(self.n_users, self.embedding_dim).to(self.device)
+        self.item_embeddings = torch.nn.Embedding(self.n_items, self.embedding_dim).to(self.device)
         self._init_weights()
 
-        self.user_betas, self.item_betas = self._compute_betas(
-            train_dataset.get_coo_array()
-        )
+        self.user_betas, self.item_betas = self._compute_betas(train_dataset.get_coo_array())
         self.constraint_matrix, self.neighbor_matrix = self._compute_item_item_matrix(
             train_dataset.get_coo_array(),
             dataset_name=train_dataset.name,
         )
 
-        optimizer = torch.optim.AdamW(
-            params=self.parameters(),
-            lr=self.lr,
-            weight_decay=self.lambda_reg,
-        )
+        # Включаем TF32 на Ampere+ (часто ускоряет matmul/elemwise без потери качества в рек-сис)
+        if self.device.type == "cuda":
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.set_float32_matmul_precision("high")
 
-        data = train_dataset.get_coo_array().coords
-        dataset = TensorDataset(
-            torch.tensor(data[0], dtype=torch.long),
-            torch.tensor(data[1], dtype=torch.long),
-        )
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-
+        # fused AdamW (если PyTorch поддерживает) — приятный бонус
+        optim_kwargs = dict(params=self.parameters(), lr=self.lr, weight_decay=self.lambda_reg)
+        try:
+            optimizer = torch.optim.AdamW(**optim_kwargs, fused=(self.device.type == "cuda"))
+        except TypeError:
+            optimizer = torch.optim.AdamW(**optim_kwargs)
         best_metric = -np.inf
         no_improve_epochs = 0
         metrics_module = Summarizer(
@@ -106,29 +94,46 @@ class UltraGCN(BaseModel, nn.Module):
             [CoverageMetric(k=k, n_items=self.n_items) for k in [5, 10, 20]],
         )
 
+        u_np, i_np = train_dataset.get_coo_array().coords
+        users_all = torch.as_tensor(u_np, dtype=torch.long, device=self.device)
+        pos_all = torch.as_tensor(i_np, dtype=torch.long, device=self.device)
+        n = users_all.numel()
+
+        # training loop
         for epoch in tqdm(range(self.num_epochs), desc="Training epochs"):
             self.trained_epochs = epoch
             self.train()
             total_loss = 0.0
-            for batch in dataloader:
-                users = batch[0].to(self.device)
-                pos_items = batch[1].to(self.device)
-                neg_items = torch.randint(0, self.n_items, (len(users), self.negative_num), device=self.device)
 
-                omega_weight = self.get_omegas(users, pos_items, neg_items)
+            perm = torch.randperm(n, device=self.device)
 
-                loss_L = self.cal_loss_L(users, pos_items, neg_items, omega_weight)
-                loss_I = self.cal_loss_I(users, pos_items)
+            for start in range(0, n, self.batch_size):
+                idx = perm[start:start + self.batch_size]
+                users = users_all[idx]
+                pos_items = pos_all[idx]
 
+                neg_items = torch.randint(
+                    0, self.n_items,
+                    (users.size(0), self.negative_num),
+                    device=self.device
+                )
+
+                pos_w, neg_w = self.get_omegas(users, pos_items, neg_items)
+
+                optimizer.zero_grad(set_to_none=True)
+
+                user_embeds = self.user_embeddings(users)
+                pos_embeds = self.item_embeddings(pos_items)
+                neg_embeds = self.item_embeddings(neg_items)
+
+                loss_L = self.cal_loss_L(user_embeds, pos_embeds, neg_embeds, pos_w, neg_w)
+                loss_I = self.cal_loss_I(user_embeds, pos_items)
                 loss = loss_L + self.gamma * loss_I
 
-                optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-                total_loss += loss.item()
-
-            avg_loss = total_loss / len(train_dataset)
+                total_loss += float(loss.detach())
 
             if epoch >= 50 and epoch % 5 == 0 and val_dataset is not None:
                 holdout_users = val_dataset.get_holdout_users()
@@ -171,14 +176,17 @@ class UltraGCN(BaseModel, nn.Module):
                 pos_items = batch[1].to(self.device)
                 neg_items = torch.randint(0, self.n_items, (len(users), self.negative_num), device=self.device)
 
-                omega_weight = self.get_omegas(users, pos_items, neg_items)
+                pos_w, neg_w = self.get_omegas(users, pos_items, neg_items)
+                optimizer.zero_grad(set_to_none=True)
 
-                loss_L = self.cal_loss_L(users, pos_items, neg_items, omega_weight)
-                loss_I = self.cal_loss_I(users, pos_items)
+                user_embeds = self.user_embeddings(users)
+                pos_embeds = self.item_embeddings(pos_items)
+                neg_embeds = self.item_embeddings(neg_items)
 
+                loss_L = self.cal_loss_L(user_embeds, pos_embeds, neg_embeds, pos_w, neg_w)
+                loss_I = self.cal_loss_I(user_embeds, pos_items)
                 loss = loss_L + self.gamma * loss_I
 
-                optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
@@ -193,23 +201,12 @@ class UltraGCN(BaseModel, nn.Module):
         for batch in tqdm(dataset.get_dataloader(batch_size=1024, shuffle=False), desc="Predicting"):
             users = batch["user_id"].to(self.device)
             history = batch["history"].to(self.device)
-            user_embeds = self.user_embeddings(users)  # batch_size * dim
-            all_item_embeds = self.item_embeddings.weight  # n_items * dim
-
-            # seen_users = self.seen_users[users.cpu().numpy()]
-            # unseen_mask = ~torch.from_numpy(seen_users).to(self.device)
-            # if unseen_mask.any():
-            #     unseen_users = users[unseen_mask]
-            #     unseen_hist = history[unseen_mask]
-                # self._partial_fit(
-                #     unseen_users,
-                #     unseen_hist,
-                # )
-                # self.eval()
             self._partial_fit(
                 users,
                 history,
             )
+            user_embeds = self.user_embeddings(users)  # batch_size * dim
+            all_item_embeds = self.item_embeddings.weight  # n_items * dim
             self.eval()
 
             with torch.no_grad():
@@ -331,45 +328,42 @@ class UltraGCN(BaseModel, nn.Module):
         return res_sim_mat_torch.float().to(self.device), res_mat_torch.long().to(self.device)
 
     def get_omegas(self, users, pos_items, neg_items):
+        # pos: (B,)
         if self.w2 > 0:
-            pos_weight = torch.mul(self.user_betas[users], self.item_betas[pos_items])
-            pos_weight = self.w1 + self.w2 * pos_weight
+            pos_w = self.user_betas[users] * self.item_betas[pos_items]
+            pos_w = self.w1 + self.w2 * pos_w
         else:
-            pos_weight = self.w1 * torch.ones(len(pos_items), device=self.device)
+            pos_w = self.w1
 
+        # neg: (B, K)
         if self.w4 > 0:
-            neg_weight = torch.mul(torch.repeat_interleave(self.user_betas[users], neg_items.size(1)), self.item_betas[neg_items.flatten()])
-            neg_weight = self.w3 + self.w4 * neg_weight
+            neg_w = self.user_betas[users].unsqueeze(1) * self.item_betas[neg_items]
+            neg_w = self.w3 + self.w4 * neg_w
         else:
-            neg_weight = self.w3 * torch.ones(neg_items.size(0) * neg_items.size(1), device=self.device)
+            neg_w = self.w3
 
-        weight = torch.cat((pos_weight, neg_weight))
-        return weight
+        return pos_w, neg_w
 
-    def cal_loss_L(self, users, pos_items, neg_items, omega_weight):
-        user_embeds = self.user_embeddings(users)
-        pos_embeds = self.item_embeddings(pos_items)
-        neg_embeds = self.item_embeddings(neg_items)
-      
-        pos_scores = (user_embeds * pos_embeds).sum(dim=-1) # batch_size
-        user_embeds = user_embeds.unsqueeze(1)
-        neg_scores = (user_embeds * neg_embeds).sum(dim=-1) # batch_size * negative_num
 
-        neg_labels = torch.zeros(neg_scores.size(), device=self.device)
-        neg_loss = F.binary_cross_entropy_with_logits(neg_scores, neg_labels, weight = omega_weight[len(pos_scores):].view(neg_scores.size()), reduction="none").mean(dim = -1)
-        
-        pos_labels = torch.ones(pos_scores.size(), device=self.device)
-        pos_loss = F.binary_cross_entropy_with_logits(pos_scores, pos_labels, weight = omega_weight[:len(pos_scores)], reduction="none")
+    def cal_loss_L(self, user_embeds, pos_embeds, neg_embeds, pos_w, neg_w):
+        # user_embeds: (B,D), pos_embeds: (B,D), neg_embeds: (B,K,D)
+        pos_logits = (user_embeds * pos_embeds).sum(dim=-1)          # (B,)
+        neg_logits = (user_embeds.unsqueeze(1) * neg_embeds).sum(-1) # (B,K)
 
-        loss = pos_loss + neg_loss * self.negative_weight
-      
-        return loss.sum()
+        # BCEWithLogits:
+        #  y=1 => softplus(-x)
+        #  y=0 => softplus(x)
+        pos_loss = pos_w * F.softplus(-pos_logits)                  # (B,)
+        neg_loss = neg_w * F.softplus(neg_logits)                   # (B,K)
+        neg_loss = neg_loss.mean(dim=1)                             # (B,)
 
-    def cal_loss_I(self, users, pos_items):
-        neighbor_embeds = self.item_embeddings(self.neighbor_matrix[pos_items])    # len(pos_items) * num_neighbors * dim
-        sim_scores = self.constraint_matrix[pos_items]     # len(pos_items) * num_neighbors
-        user_embeds = self.user_embeddings(users).unsqueeze(1)
+        return (pos_loss + self.negative_weight * neg_loss).sum()
 
-        loss = -sim_scores * (user_embeds * neighbor_embeds).sum(dim=-1).sigmoid().log()
+    def cal_loss_I(self, user_embeds, pos_items):
+        neighbor_embeds = self.item_embeddings(self.neighbor_matrix[pos_items])  # (B,K,D)
+        sim_scores = self.constraint_matrix[pos_items]                           # (B,K)
 
-        return loss.sum()
+        logits = (user_embeds.unsqueeze(1) * neighbor_embeds).sum(dim=-1)        # (B,K)
+        # -sim * log(sigmoid(logits))
+        return -(sim_scores * F.logsigmoid(logits)).sum()
+
