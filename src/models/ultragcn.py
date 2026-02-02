@@ -103,7 +103,6 @@ class UltraGCN(BaseModel, nn.Module):
         for epoch in tqdm(range(self.num_epochs), desc="Training epochs"):
             self.trained_epochs = epoch
             self.train()
-            total_loss = 0.0
 
             perm = torch.randperm(n, device=self.device)
 
@@ -133,9 +132,7 @@ class UltraGCN(BaseModel, nn.Module):
                 loss.backward()
                 optimizer.step()
 
-                total_loss += float(loss.detach())
-
-            if epoch >= 50 and epoch % 5 == 0 and val_dataset is not None:
+            if epoch >= 50 and epoch % 10 == 0 and val_dataset is not None:
                 holdout_users = val_dataset.get_holdout_users()
                 val_predictions = self.predict(val_dataset, top_n=20)[holdout_users]
                 val_targets = val_dataset.get_holdout_array()[holdout_users]
@@ -147,7 +144,7 @@ class UltraGCN(BaseModel, nn.Module):
                 else:
                     no_improve_epochs += 1
 
-                if self.early_stopping and no_improve_epochs >= 5:
+                if self.early_stopping and no_improve_epochs >= 2:
                     break
 
     def suggest_additional_params(self) -> dict:
