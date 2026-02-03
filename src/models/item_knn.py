@@ -5,14 +5,56 @@ from typing import Any
 
 import numpy as np
 import optuna
-from scipy.sparse import csr_matrix, save_npz, load_npz
+from scipy.sparse import csr_matrix, save_npz, load_npz, vstack
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.base import BaseModel
 
-# Cosine similarity with zeroed diagonal
-def cosine_similarity_zd(matrix: csr_matrix) -> csr_matrix:
-    similarity = cosine_similarity(matrix, dense_output=False)
+# Jaccard similarity for binary feedback matrices
+def jaccard_similarity(matrix: csr_matrix, batch_size: int = 1024) -> csr_matrix:
+    matrix_bin = matrix.astype("bool").astype("int8")
+    row_sums = np.asarray(matrix_bin.sum(axis=1)).ravel()
+    n_rows = matrix_bin.shape[0]
+
+    blocks: list[csr_matrix] = []
+    for start in range(0, n_rows, batch_size):
+        stop = min(start + batch_size, n_rows)
+        block = matrix_bin[start:stop]
+        inter = block @ matrix_bin.T
+
+        if inter.nnz:
+            inter = inter.tocsr().astype(np.float32)
+            data = inter.data
+            indices = inter.indices
+            indptr = inter.indptr
+            for i in range(stop - start):
+                row_start, row_stop = indptr[i], indptr[i + 1]
+                if row_start == row_stop:
+                    continue
+                denom = row_sums[start + i] + row_sums[indices[row_start:row_stop]] - data[row_start:row_stop]
+                data[row_start:row_stop] = np.divide(
+                    data[row_start:row_stop],
+                    denom,
+                    out=np.zeros_like(data[row_start:row_stop], dtype=float),
+                    where=denom != 0,
+                )
+        blocks.append(inter)
+
+    if not blocks:
+        return csr_matrix(matrix_bin.shape, dtype=float)
+    return vstack(blocks).tocsr()
+
+# Similarity with zeroed diagonal
+def similarity_zd(matrix: csr_matrix, similarity_type: str) -> csr_matrix:
+    if similarity_type == "cosine":
+        similarity = cosine_similarity(matrix, dense_output=False)
+    elif similarity_type == "jaccard":
+        similarity = jaccard_similarity(matrix)
+    else:
+        raise ValueError(
+            f"Unknown similarity type: {similarity_type}. "
+            "Available types: 'cosine', 'jaccard'."
+        )
     similarity.setdiag(0)
     similarity.eliminate_zeros()
     return similarity
@@ -44,9 +86,18 @@ def truncate_similarity(similarity: csr_matrix, k: int) -> csr_matrix:
     return csr_matrix((new_data_arr, new_inds_arr, new_ptrs), shape=similarity.shape)
 
 class ItemKNNModel(BaseModel):
-    def __init__(self, n_neighbors: int | None = None, name: str = "item_knn", **kwargs):
+    def __init__(
+        self,
+        n_neighbors: int | None = None,
+        similarity_type: str = "cosine",
+        downvote_seen_items: bool = True,
+        name: str = "item_knn",
+        **kwargs,
+    ):
         super().__init__(name=name)
         self.n_neighbors = n_neighbors
+        self.similarity_type = similarity_type
+        self.downvote_seen_items = downvote_seen_items
         self.item_similarity: csr_matrix | None = None
         self._train_matrix: csr_matrix | None = None
         self._eval_users: np.ndarray | None = None
@@ -56,7 +107,7 @@ class ItemKNNModel(BaseModel):
         n_users = getattr(train_dataset, "n_users", None)
         self._train_matrix = coo.tocsr() if hasattr(coo, "tocsr") else csr_matrix(coo)
         self._eval_users = np.arange(n_users if n_users is not None else self._train_matrix.shape[0], dtype=np.int64)
-        item_similarity = cosine_similarity_zd(self._train_matrix.T)
+        item_similarity = similarity_zd(self._train_matrix.T, self.similarity_type)
         if self.n_neighbors is not None:
             item_similarity = truncate_similarity(item_similarity, self.n_neighbors)
         self.item_similarity = item_similarity
@@ -86,7 +137,7 @@ class ItemKNNModel(BaseModel):
             # Compute candidate scores for this batch
             scores_dense = self._score(batch_user_item).astype(float)
 
-            if mask.any():
+            if self.downvote_seen_items and mask.any():
                 rows_mask = np.repeat(np.arange(history.shape[0]), mask.sum(axis=1))
                 cols_mask = history[mask]
                 # Mask seen items so they never enter top-N
@@ -110,7 +161,13 @@ class ItemKNNModel(BaseModel):
 
     def sample_params(self, trial: optuna.trial.Trial):
         self.n_neighbors = trial.suggest_int("n_neighbors", 5, 200, step=5)
-        return {"n_neighbors": self.n_neighbors}
+        self.similarity_type = trial.suggest_categorical("similarity_type", ["cosine", "jaccard"])
+        self.downvote_seen_items = trial.suggest_categorical("downvote_seen_items", [True, False])
+        return {
+            "n_neighbors": self.n_neighbors,
+            "similarity_type": self.similarity_type,
+            "downvote_seen_items": self.downvote_seen_items,
+        }
 
     def _score(self, user_item_matrix: csr_matrix) -> np.ndarray:
         scores = user_item_matrix.dot(self.item_similarity)

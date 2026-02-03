@@ -1,0 +1,17 @@
+- name: n_neighbors
+  type: int
+  low: 5
+  high: 1000
+  step: 5
+
+- name: similarity_type
+  type: categorical
+  choices:
+    - cosine
+    - jaccard
+
+- name: downvote_seen_items
+  type: categorical
+  choices:
+    - true
+    - false
