@@ -1,6 +1,6 @@
 defaults:
   - dataset: movielens
-  - model: popular_random
+  - model: sasrec
   - metrics: base
   - _self_
 

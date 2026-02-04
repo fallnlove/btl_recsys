@@ -1,0 +1,16 @@
+_target_: src.models.SASRecModel
+name: "sasrec"
+seed: 42
+device: "cuda"
+
+lr: 1e-3
+n_epochs: 500
+
+hidden_size: 64
+num_blocks: 3
+num_heads: 1
+dropout: 0.4
+seq_len: 200
+batch_size: 256
+filter_seen: True
+max_patience: 10

@@ -12,6 +12,9 @@ from src.models.random import RandomModel
 from src.models.pure_svd import PureSVDModel
 from src.models.gasatf import GASATF
 from src.models.als_implicit import ALS_Implicit
+from src.models.sasrec import SASRecModel
+from src.models.gasatf import GASATF
+from src.models.sasrec import SASRecModel
 
 __all__ = [
     "PopularRandom",
@@ -29,4 +32,7 @@ __all__ = [
     "PureSVDModel",
     "GASATF",
     "ALS_Implicit"
+    "SASRecModel"
+    "GASATF",
+    "SASRecModel"
 ]

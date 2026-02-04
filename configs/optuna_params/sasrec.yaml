@@ -1,0 +1,49 @@
+- name: lr
+  type: categorical
+  choices:
+    - 0.005
+    - 0.001
+    - 0.0005
+
+- name: hidden_size
+  type: categorical
+  choices:
+    - 32
+    - 64
+    - 128
+
+- name: num_heads
+  type: categorical
+  choices:
+    - 1
+    - 2
+
+- name: dropout
+  type: categorical
+  choices:
+    - 0.1
+    - 0.2
+    - 0.3
+    - 0.4
+
+- name: batch_size
+  type: categorical
+  choices:
+    - 128
+    - 256
+    - 512
+
+- name: bucket_size_y
+  type: categorical
+  choices:
+    - 16
+    - 32
+    - 64
+    - 128
+    - 256
+
+- name: filter_seen
+  type: categorical
+  choices:
+    - true
+    - false
