@@ -16,7 +16,8 @@ class RecSysDataset(Dataset):
                  url: str, 
                  split: str, 
                  merge_train_val: bool,
-                 holdout_filename: str = ""):
+                 holdout_filename: str = "",
+                 shuffle_timestamps: bool = False):
         assert split in ["train", "val", "test"], "Split must be one of 'train', 'val', or 'test'."
         assert not (merge_train_val and split == "val"), "You cannot use validation split when merging train and val sets."
         self._split = split
@@ -64,6 +65,9 @@ class RecSysDataset(Dataset):
                 [self._df_train, self._df_val],
                 ignore_index=True
             ).sort_values(by=["timestamp"])
+        if shuffle_timestamps:
+            self._df = self._df.sample(frac=1).reset_index(drop=True)
+            self._df['timestamp'] = np.arange(len(self._df))
         self._users = self._df["user_id"].unique()
         self._index = self._create_index()
 
