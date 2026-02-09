@@ -36,10 +36,11 @@ class LightGCN(BaseModel):
         n_valid,
         patience,
         val_top_n,
-
+        n_negatives,
         foldin_epochs,
         foldin_lr,
         foldin_reg,
+        need_downvote,
     ):
         super().__init__(name)
 
@@ -55,17 +56,17 @@ class LightGCN(BaseModel):
 
         self.n_layers = int(n_layers)
         self.edge_dropout = float(edge_dropout)
+        self.n_negatives = int(n_negatives)
 
         self.n_valid = max(1, int(n_valid))
         self.patience = max(1, int(patience))
         self.val_top_n = int(val_top_n)
 
-        self.catalog_chunk_size = None
-
         self.foldin_epochs = int(foldin_epochs)
         self.foldin_lr = float(foldin_lr)
         self.foldin_reg = float(foldin_reg)
         self.foldin_batch_size = int(batch_size)
+        self.need_downvote = bool(need_downvote)
 
         self.model = None
         self.n_users = 0
@@ -74,34 +75,9 @@ class LightGCN(BaseModel):
         self.user_item_edge_index = None
         self.edge_index = None
 
-        self.train_seen = None
-
         self.loss_history = []
         self.val_history = []
         self.trained_epochs = 0
-
-    def _auto_chunk_size(self, n_items: int, batch_size: int, rank: int, gpu_gb: float = None) -> int:
-        """Auto-select chunk_size based on GPU memory."""
-        if gpu_gb is None:
-            if self.device.type == "cuda":
-                gpu_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)  # GB
-            else:
-                gpu_gb = 4.0
-
-        target_mem = gpu_gb * 0.7 * 1024**3  # bytes
-        
-        mem_for_scores = target_mem * 0.7
-        
-        bytes_per_score = rank * 4
-        max_chunk = int(mem_for_scores / (batch_size * bytes_per_score))
-        
-        chunk = min(max_chunk, n_items // 2)
-        chunk = max(chunk, 512)
-        
-        if self.verbose:
-            print(f"Auto chunk_size: {chunk} (GPU: {gpu_gb:.1f}GB, batch: {batch_size}, rank: {rank})")
-        
-        return chunk
 
     def _build_graph(self, user_ids, item_ids):
         u = torch.as_tensor(user_ids, device=self.device, dtype=torch.long)
@@ -113,109 +89,34 @@ class LightGCN(BaseModel):
         data = np.ones(len(user_ids), dtype=np.bool_)
         self.train_seen = sp.csr_matrix((data, (user_ids, item_ids)), shape=(self.n_users, self.n_items))
 
-    @staticmethod
-    def _mask_seen_scores_in_chunk(scores, batch_users, seen_csr, start, end, device):
-        users_np = batch_users.detach().cpu().numpy()
-        indptr = seen_csr.indptr
-        indices = seen_csr.indices
+    def _bpr_loss(self, user_embs, item_embs, users, pos_items):
+        batch_size = users.size(0)
 
-        rows_list, cols_list = [], []
-        for r, u in enumerate(users_np):
-            row_idx = indices[indptr[u] : indptr[u + 1]]
-            if row_idx.size == 0:
-                continue
-            m = (row_idx >= start) & (row_idx < end)
-            if np.any(m):
-                cols = row_idx[m] - start
-                rows = np.full(cols.shape[0], r, dtype=np.int64)
-                rows_list.append(rows)
-                cols_list.append(cols)
-
-        if rows_list:
-            rows = torch.from_numpy(np.concatenate(rows_list)).to(device)
-            cols = torch.from_numpy(np.concatenate(cols_list)).to(device)
-            scores[rows, cols] = -1e9
-
-    def _bpr_full_catalog_loss(self, batch_users, batch_pos_items, user_embs, item_embs, seen_csr, chunk_size):
-        u = user_embs[batch_users]
-        p = item_embs[batch_pos_items]
-        pos_scores = (u * p).sum(dim=-1, keepdim=True)
-
-        total = u.new_tensor(0.0)
-        denom = u.new_tensor(0.0)
-
-        for start in range(0, self.n_items, chunk_size):
-            end = min(start + chunk_size, self.n_items)
-            scores = u @ item_embs[start:end].t()
-
-            self._mask_seen_scores_in_chunk(scores, batch_users, seen_csr, start, end, scores.device)
-
-            valid = scores > -5e8
-            loss_mat = -F.logsigmoid(pos_scores - scores)
-
-            total = total + (loss_mat * valid.float()).sum()
-            denom = denom + valid.sum().float()
-
-        return total / denom.clamp(min=1.0)
-
-    def _build_seen_hist_csr(self, history_items, n_items):
-        hist = history_items.detach().cpu().numpy()
-        mask = hist != -1
-        if not mask.any():
-            return sp.csr_matrix((hist.shape[0], n_items), dtype=bool)
-
-        rows, cols = np.where(mask)
-        items = hist[rows, cols]
-        data = np.ones(len(rows), dtype=bool)
-        return sp.csr_matrix((data, (rows, items)), shape=(hist.shape[0], n_items))
-
-    def _extract_new_items_only(self, user_ids, history_all):
-        users = user_ids.detach().cpu().numpy()
-        hist = history_all.detach().cpu().numpy()
-
-        B, L = hist.shape
-        out = np.full((B, L), -1, dtype=np.int64)
-        any_new = False
-
-        indptr = self.train_seen.indptr
-        indices = self.train_seen.indices
-
-        for r, u in enumerate(users):
-            items = hist[r]
-            valid = items != -1
-            if not np.any(valid):
-                continue
-
-            cand = items[valid].astype(np.int64)
-
-            seen_u = indices[indptr[u] : indptr[u + 1]]
-            if seen_u.size == 0:
-                new = cand
+        neg_items = torch.randint(0, self.n_items, (batch_size, self.n_negatives), device=self.device)
+        for _ in range(5):
+            mask_batch = (neg_items == pos_items.unsqueeze(1))
+            if mask_batch.any():
+                new_samples = torch.randint(0, self.n_items, neg_items.shape, device=self.device)
+                neg_items = torch.where(mask_batch, new_samples, neg_items)
             else:
-                m = ~np.isin(cand, seen_u, assume_unique=False)
-                new = cand[m]
+                break
 
-            if new.size > 0:
-                any_new = True
-                out[r, : new.size] = new
+        u = user_embs[users]
+        p = item_embs[pos_items]
+        n = item_embs[neg_items]
 
-        return torch.as_tensor(out, device=history_all.device, dtype=torch.long), any_new
+        pos_scores = (u * p).sum(dim=1, keepdim=True)
+        neg_scores = (u.unsqueeze(1) * n).sum(dim=-1)
 
-    def _foldin_optimize_users(
-        self,
-        user_ids_local,
-        pos_history_new,
-        seen_hist_csr,
-        item_embs,
-        u_init,
-    ):
+        loss = -F.logsigmoid(pos_scores - neg_scores).mean()
+        
+        return loss
+
+    def _foldin_optimize_users(self, pos_history_new, item_embs, u_init):
         if self.foldin_epochs <= 0:
             return u_init
 
         with torch.enable_grad():
-            device = item_embs.device
-            bsz = pos_history_new.size(0)
-
             mask_pos = pos_history_new != -1
             if not mask_pos.any():
                 return u_init
@@ -227,10 +128,10 @@ class LightGCN(BaseModel):
             u = u_init.detach().clone()
             u.requires_grad_(True)
             
-            opt = torch.optim.Adam([u], lr=self.foldin_lr, betas=(0.9, 0.999), eps=1e-8)
+            opt = torch.optim.Adam([u], lr=self.foldin_lr)
 
             for _ in range(self.foldin_epochs):
-                perm = torch.randperm(n_pairs, device=device)
+                perm = torch.randperm(n_pairs, device=self.device)
                 pu = pos_users[perm]
                 pi = pos_items[perm]
 
@@ -244,34 +145,15 @@ class LightGCN(BaseModel):
                     bu = pu[s:e]
                     bp = pi[s:e]
 
-                    u_sub = u[bu]
-                    p_emb = item_embs[bp]
-                    pos_scores = (u_sub * p_emb).sum(dim=-1, keepdim=True)
-
-                    total = u_sub.new_tensor(0.0)
-                    denom = u_sub.new_tensor(0.0)
-
-                    for start in range(0, self.n_items, self.catalog_chunk_size):
-                        end = min(start + self.catalog_chunk_size, self.n_items)
-                        scores = u_sub @ item_embs[start:end].t()
-
-                        self._mask_seen_scores_in_chunk(scores, bu, seen_hist_csr, start, end, scores.device)
-
-                        valid = scores > -5e8
-                        loss_mat = -F.logsigmoid(pos_scores - scores)
-                        total = total + (loss_mat * valid.float()).sum()
-                        denom = denom + valid.sum().float()
-
-                    bpr = total / denom.clamp(min=1.0)
-                    reg = 0.5 * self.foldin_reg * u_sub.norm(dim=1).pow(2).mean()
-                    loss = bpr + reg
+                    loss = self._bpr_loss(u, item_embs, bu, bp)
+                    reg = 0.5 * self.foldin_reg * u[bu].norm(dim=1).pow(2).mean()
+                    total_loss = loss + reg
 
                     opt.zero_grad()
-                    loss.backward()
+                    total_loss.backward()
                     opt.step()
 
             return u.detach()
-
 
     def fit(self, train_dataset, val_dataset=None):
         torch.manual_seed(self.seed)
@@ -279,13 +161,6 @@ class LightGCN(BaseModel):
 
         self.n_users = int(train_dataset.n_users)
         self.n_items = int(train_dataset.n_items)
-
-        if self.catalog_chunk_size is None:
-            self.catalog_chunk_size = self._auto_chunk_size(
-                n_items=self.n_items, 
-                batch_size=self.batch_size, 
-                rank=self.rank
-            )
 
         coo = train_dataset.get_coo_array()
         user_ids = coo.row.astype(np.int64)
@@ -318,7 +193,7 @@ class LightGCN(BaseModel):
             perm = torch.randperm(n_pos, device=self.device)
             users = all_users[perm]
             pos_nodes = all_pos_nodes[perm]
-
+            
             num_batches = (n_pos + self.batch_size - 1) // self.batch_size
 
             for b in range(num_batches):
@@ -328,8 +203,7 @@ class LightGCN(BaseModel):
                     continue
 
                 batch_users = users[start:end]
-                batch_pos_nodes = pos_nodes[start:end]
-                batch_pos_items = batch_pos_nodes - self.n_users
+                batch_pos_items = pos_nodes[start:end] - self.n_users
 
                 ui = self.user_item_edge_index
                 if self.edge_dropout > 0.0:
@@ -340,16 +214,9 @@ class LightGCN(BaseModel):
                 user_embs = all_embs[: self.n_users]
                 item_embs = all_embs[self.n_users :]
 
-                bpr = self._bpr_full_catalog_loss(
-                    batch_users=batch_users,
-                    batch_pos_items=batch_pos_items,
-                    user_embs=user_embs,
-                    item_embs=item_embs,
-                    seen_csr=self.train_seen,
-                    chunk_size=self.catalog_chunk_size,
-                )
+                bpr = self._bpr_loss(user_embs, item_embs, batch_users, batch_pos_items)
 
-                node_ids = torch.unique(torch.cat([batch_users, batch_pos_nodes], dim=0))
+                node_ids = torch.unique(torch.cat([batch_users, pos_nodes[start:end]], dim=0))
                 e0 = self.model.embedding.weight[node_ids]
                 reg = 0.5 * e0.norm(dim=1).pow(2).mean()
 
@@ -370,10 +237,7 @@ class LightGCN(BaseModel):
                 self.val_history.append(metric)
 
                 if self.verbose:
-                    print(
-                        f"Epoch {epoch + 1}/{self.n_epochs} - loss {epoch_loss:.4f} | "
-                        f"val NDCG@{self.val_top_n}: {metric:.4f}"
-                    )
+                    print(f"Epoch {epoch + 1}/{self.n_epochs} - loss {epoch_loss:.4f} | val NDCG@{self.val_top_n}: {metric:.4f}")
 
                 if metric > best_metric:
                     best_metric = metric
@@ -423,17 +287,11 @@ class LightGCN(BaseModel):
             user_ids = torch.as_tensor(user_raw, device=self.device, dtype=torch.long)
             history_all = torch.as_tensor(hist_raw, device=self.device, dtype=torch.long)
 
-            pos_history_new, any_new = self._extract_new_items_only(user_ids, history_all)
-
-            seen_hist_csr = self._build_seen_hist_csr(history_all, self.n_items)
-
             u_init = user_embs_tr[user_ids]
 
-            if any_new and self.foldin_epochs > 0:
+            if self.foldin_epochs > 0:
                 user_vecs = self._foldin_optimize_users(
-                    user_ids_local=torch.arange(user_ids.size(0), device=self.device),
-                    pos_history_new=pos_history_new,
-                    seen_hist_csr=seen_hist_csr,
+                    pos_history_new=history_all,
                     item_embs=item_embs,
                     u_init=u_init,
                 )
@@ -442,13 +300,14 @@ class LightGCN(BaseModel):
 
             scores = user_vecs @ item_embs.t()
 
-            mask = history_all != -1
-            if mask.any():
-                min_val = scores.min() - 1.0
-                lengths = mask.sum(dim=1)
-                rows = torch.repeat_interleave(torch.arange(history_all.size(0), device=self.device), lengths)
-                cols = history_all[mask]
-                scores[rows, cols] = min_val
+            if self.need_downvote:
+                mask = history_all != -1
+                if mask.any():
+                    min_val = scores.min() - 1.0
+                    lengths = mask.sum(dim=1)
+                    rows = torch.repeat_interleave(torch.arange(history_all.size(0), device=self.device), lengths)
+                    cols = history_all[mask]
+                    scores[rows, cols] = min_val
 
             _, top_idx = torch.topk(scores, k=top_n, dim=1)
             predictions[user_raw] = top_idx.detach().cpu().numpy()

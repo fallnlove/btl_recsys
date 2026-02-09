@@ -14,3 +14,4 @@ resample_every_factor: 1.0
 min_folding_epochs: 2
 folding_epsilon: 1e-3
 patience: 2
+need_downvote: True

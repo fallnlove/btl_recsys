@@ -31,4 +31,3 @@
 - name: rescaled
   type: categorical
   choices: [true, false]
-

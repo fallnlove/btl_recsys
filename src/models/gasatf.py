@@ -268,7 +268,7 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
                  seed: int | None = None,
                  name: str = "GA-SATF",
                  dtype=np.float32,
-                 downvote_seen_items: bool = True,
+                 need_downvote: bool = True,
                  scaling_factor: float = 0.0,
                  rescaled: bool = False,
                  **kwargs
@@ -292,12 +292,12 @@ class GASATF(BaseModel, TensorBasedModel, AttentionBuilder):
         self.growth_tol = growth_tol
         self.iters = iters
         self.tries = tries
-        self.downvote_seen_items = downvote_seen_items
         self.val_top_n = val_top_n
         
         self.scaling_factor = scaling_factor
         self.rescaled = rescaled
-        
+        self.downvote_seen_items = need_downvote
+
         self.idx = None
         self.val = None
         self.shape = None

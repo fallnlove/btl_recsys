@@ -1,7 +1,0 @@
-_target_: src.models.ALS_Implicit
-name: als_implicit
-lambda_: 1
-alpha: 1
-rank: 1
-n_iters: 1
-random_seed: 0

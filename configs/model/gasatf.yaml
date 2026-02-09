@@ -7,7 +7,6 @@ max_positions: 0
 growth_tol: 1e-3
 iters: 20
 tries: 3
-downvote_seen_items: true
 verbose: False
 rank_u: 0
 rank_v: 0
@@ -16,3 +15,4 @@ seed: 42
 scaling_factor: 1.0
 decay: 1.0
 rescaled: true
+need_downvote: True

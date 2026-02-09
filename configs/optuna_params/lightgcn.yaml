@@ -19,20 +19,23 @@
 - name: edge_dropout
   type: float
   low: 0.0
-  high: 0.5
+  high: 0.8
   step: 0.1
+
+- name: n_negatives
+  type: categorical
+  choices: [1, 5, 10, 25, 50, 100]
 
 - name: foldin_epochs
   type: int
   low: 1
-  high: 8
+  high: 10
   step: 1
 
 - name: foldin_lr
   type: categorical
-  choices: [1e-4, 1e-3, 1e-2]
+  choices: [1e-3, 5e-3, 1e-2, 5e-2]
 
 - name: foldin_reg
   type: categorical
-  choices: [0.0, 1e-6, 1e-5, 1e-4]
-
+  choices: [0.0, 1e-6, 1e-5, 1e-4, 1e-3]

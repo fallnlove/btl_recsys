@@ -204,7 +204,8 @@ class MFSGD(BaseModel):
             lambda_geo: int = 256,
             n_negatives: int = 1,
             resample_every_factor: float = 1.0,
-            gamma: float = 1.0
+            gamma: float = 1.0,
+            need_downvote = True,
     ):
         super().__init__(str(name))
         self.rank = int(rank)
@@ -223,6 +224,7 @@ class MFSGD(BaseModel):
         self.gamma = float(gamma)
         self.min_folding_epochs = int(min_folding_epochs)
         self.folding_epsilon = float(folding_epsilon)
+        self.need_downvote = bool(need_downvote)
 
         self.P = None
         self.Q = None
@@ -336,10 +338,12 @@ class MFSGD(BaseModel):
             )
 
             scores = P_batch @ Q_contiguous.T
-            rows = np.repeat(np.arange(len(batch_users)), history.shape[1])
-            cols = history.ravel()
-            valid_mask = cols != -1
-            scores[rows[valid_mask], cols[valid_mask]] = -np.inf
+
+            if self.need_downvote:
+                rows = np.repeat(np.arange(len(batch_users)), history.shape[1])
+                cols = history.ravel()
+                valid_mask = cols != -1
+                scores[rows[valid_mask], cols[valid_mask]] = -np.inf
 
             unsorted_top = np.argpartition(-scores, top_n, axis=1)[:, :top_n]
             top_scores = np.take_along_axis(scores, unsorted_top, axis=1)
