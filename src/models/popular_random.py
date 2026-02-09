@@ -3,7 +3,6 @@ import numpy as np
 from tqdm import tqdm
 
 from src.base import BaseModel
-from src.models.utils.repeatable_rec import is_repeatable
 
 class PopularRandom(BaseModel):
     """
@@ -40,11 +39,10 @@ class PopularRandom(BaseModel):
 
             probs = base_probs.expand(B, n_items).clone()     # shape: (B, n_items)
 
-            if not is_repeatable(dataset):
-                mask = history >= 0
-                padded_history = history.clone()
-                padded_history[~mask] = 0
-                probs.scatter_(1, padded_history, 0.0)
+            mask = history >= 0
+            padded_history = history.clone()
+            padded_history[~mask] = 0
+            probs.scatter_(1, padded_history, 0.0)
             sampled = torch.multinomial(
                 probs,
                 num_samples=top_n,

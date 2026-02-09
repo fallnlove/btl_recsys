@@ -59,3 +59,6 @@ class RandomModel(BaseModel):
         Nothing to load for random model.
         """
         pass
+
+    def suggest_additional_params(self) -> dict:
+        return {}
