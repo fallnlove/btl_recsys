@@ -169,10 +169,11 @@ class BPR_MF(BaseModel):
             rows = np.repeat(np.arange(batch_history.shape[0]), mask.sum(axis=1))
             cols = batch_history[mask]
 
-            useridx = np.repeat(batch_users, mask.sum(axis=1))
+            useridx_local = np.repeat(np.arange(B), mask.sum(axis=1))
+            P_batch = self.P[batch_users].copy()
 
             sgd_sweeps(
-                useridx=useridx,
+                useridx=useridx_local,
                 itemidx=itemidx,
                 n_users=n_users,
                 n_items=n_items,
@@ -180,14 +181,14 @@ class BPR_MF(BaseModel):
                 n_epochs=5,
                 learning_rate=self.learning_rate,
                 regularization=self.regularization,
-                P=self.P,
+                P=P_batch,
                 Q=self.Q,
                 indptr=indptr,
                 indices=indices,
                 folding_in=True
             )
 
-            scores = self.P[batch_users] @ self.Q.T
+            scores = P_batch @ self.Q.T
 
             scores[rows, cols] = -np.inf
 

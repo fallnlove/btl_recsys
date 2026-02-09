@@ -1,0 +1,5 @@
+- name: regularization
+  type: float
+  log: true
+  low: 1e-6
+  high: 10
