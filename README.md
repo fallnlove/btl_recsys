@@ -1,30 +1,8 @@
 # Bradley-Terry Rankings for Recommender Systems Across Dataset Taxonomies
 
-```
-RecSys-BTL/
-├── src/
-│   ├── base.py
-│   ├── model/
-│   │   ├── sasrec.py
-│   │   ├── ultra_gcn.py
-│   │   ├── funk_svd.py
-│   │   └── ...
-│   ├── metrics/
-│   │   ├── hitrate.py
-│   │   ├── ndcg.py
-│   │   ├── recall.py
-│   │   └── coverage.py
-│   └── datasets/
-│       ├── sequential.py
-│       └── non_sequential.py
-├── srcipts
-├── configs
-├── train.py
-├── train_optuna.py
-├── inference.py
-├── btl.py
-└── ...
-```
+This repository is the official implementation of our KDD 2026 paper "Bradley-Terry Rankings for Recommender Systems Across Dataset Taxonomies" by Ekaterina Grishina*, Stepan Kuznetsov*, Askar Tsyganov*, Ilya Ivanov*, Daria Korovaitceva*, Margarita Rusanova*, Uliana Parkina*, Alexander Derevyagin*, Evgeny Frolov, Sergey Samsonov, and Anton Lysenko.
+
+\* - denotes equal contribution
 
 ## Datasets
 
@@ -192,7 +170,3 @@ python3 sbatch/run.py \
 	--n_jobs "$N_JOBS" \
 	$( [ "$MULTIVARIATE" -eq 1 ] && echo "--multivariate" )
 ```
-
-
-
-
