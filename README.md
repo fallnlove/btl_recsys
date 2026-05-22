@@ -1,4 +1,4 @@
-# Multi-Representation Recommender Systems
+# Bradley-Terry Rankings for Recommender Systems Across Dataset Taxonomies
 
 ```
 RecSys-BTL/
@@ -192,4 +192,7 @@ python3 sbatch/run.py \
 	--n_jobs "$N_JOBS" \
 	$( [ "$MULTIVARIATE" -eq 1 ] && echo "--multivariate" )
 ```
+
+
+
 
